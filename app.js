@@ -102,7 +102,6 @@ function ensureAudio() {
 // ── Citirea și detectarea hardware a microfoanelor din laptop ────────────────
 async function populateAudioDevices() {
   try {
-    // Cerem permisiune scurtă pentru a debloca numele reale ale microfoanelor conectate în laptop
     await navigator.mediaDevices.getUserMedia({ audio: true }).then(s => s.getTracks().forEach(t => t.stop()));
     const devices = await navigator.mediaDevices.enumerateDevices();
     const audioInputs = devices.filter(d => d.kind === "audioinput");
@@ -121,7 +120,7 @@ async function populateAudioDevices() {
 populateAudioDevices();
 navigator.mediaDevices.addEventListener("devicechange", populateAudioDevices);
 
-// Oprire completă hardware microfon
+// Oprire hardware microfon
 function stopMicHardware() {
   if (micSource) { micSource.disconnect(); micSource = null; }
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
@@ -130,7 +129,7 @@ function stopMicHardware() {
   btnMicListen.classList.remove("active");
 }
 
-// Ascultare Microfon selectat din Laptop
+// Ascultare Microfon Laptop
 btnMicListen.addEventListener("click", async () => {
   ensureAudio();
   if (ac.state === "suspended") await ac.resume();
@@ -140,7 +139,6 @@ btnMicListen.addEventListener("click", async () => {
     return;
   }
 
-  // Luăm dispozitivul selectat de utilizator în dropdown
   const deviceId = audioDeviceSel.value;
   const constraints = {
     audio: deviceId ? { deviceId: { exact: deviceId } } : true
@@ -149,7 +147,6 @@ btnMicListen.addEventListener("click", async () => {
   try {
     micStream = await navigator.mediaDevices.getUserMedia(constraints);
     micSource = ac.createMediaStreamSource(micStream);
-    // Conectăm microfonul direct în analizatorul vumetrului
     micSource.connect(analyser);
     micListening = true;
     btnMicListen.textContent = "🛑 Stop Mic";
@@ -159,7 +156,6 @@ btnMicListen.addEventListener("click", async () => {
   }
 });
 
-// Schimbarea automată a sursei dacă utilizatorul alege alt microfon în timp ce ascultă
 audioDeviceSel.addEventListener("change", () => {
   if (micListening) {
     stopMicHardware();
@@ -209,13 +205,11 @@ fileInput.addEventListener("change", (e) => {
   fileInput.value = "";
 });
 
-// Redare melodie după indexul din listă
 async function playIndex(index) {
   ensureAudio();
   const clip = clips[index];
   if (!clip) return;
 
-  // Oprim melodia veche dacă rula ceva
   if (current.audio) {
     current.audio.pause();
     try { current.audio.currentTime = 0; } catch {}
@@ -230,7 +224,6 @@ async function playIndex(index) {
     else { btnNext.click(); }
   });
 
-  // Conectăm nodul audio direct în sistem
   const sourceNode = ac.createMediaElementSource(media);
   sourceNode.connect(gainA);
 
@@ -241,7 +234,7 @@ async function playIndex(index) {
       playing = true;
       btnPlay.textContent = "Pause";
     } catch (err) {
-      console.error("Playback blocat de browser:", err);
+      console.error(err);
     }
   }
 
@@ -249,14 +242,12 @@ async function playIndex(index) {
   renderList();
 }
 
-// RENDER PLAYLIST CU COMBINAȚIA ORIGINALĂ DE PLAY ȘI STOP PE TRACK
 function renderList() {
   listEl.innerHTML = "";
   clips.forEach((c, i) => {
     const li = document.createElement("li");
     if (i === current.index && !micListening) li.classList.add("active");
     
-    // Nume track
     const nameSpan = document.createElement("span");
     nameSpan.textContent = c.name.length > 22 ? c.name.slice(0, 20) + "…" : c.name;
     li.appendChild(nameSpan);
@@ -266,7 +257,6 @@ function renderList() {
     actions.style.gap = "6px";
     actions.style.marginLeft = "12px";
 
-    // Buton redare individual (Play Track)
     const itemPlay = document.createElement("button");
     itemPlay.textContent = "▶";
     itemPlay.style.padding = "2px 6px";
@@ -279,7 +269,6 @@ function renderList() {
       playIndex(i); 
     });
 
-    // Buton oprire individual (Stop Track)
     const itemStop = document.createElement("button");
     itemStop.textContent = "⏹";
     itemStop.style.padding = "2px 6px";
@@ -302,7 +291,6 @@ function renderList() {
   });
 }
 
-// Controale principale bară de sus
 btnPlay.addEventListener("click", async () => {
   ensureAudio();
   if (!clips.length) return;
@@ -329,7 +317,6 @@ btnStop.addEventListener("click", () => {
 btnPrev.addEventListener("click", () => { if (clips.length) playIndex((current.index - 1 + clips.length) % clips.length); });
 btnNext.addEventListener("click", () => { if (clips.length) playIndex((current.index + 1) % clips.length); });
 
-// Media element inputs
 imageInput.addEventListener("change", (e) => {
   ensureAudio();
   const file = (e.target.files || [])[0];
@@ -344,73 +331,4 @@ imageInput.addEventListener("change", (e) => {
 scrollImageInput.addEventListener("change", (e) => {
   ensureAudio();
   const file = (e.target.files || [])[0];
-  if (file && viz) viz.setScrollingImage(URL.createObjectURL(file));
-  scrollImageInput.value = "";
-});
-btnSuggestion.addEventListener("click", () => { ensureAudio(); if (viz) viz.setScrollingImage("./websimsuggestionimage.png"); });
-
-// Opțiuni Visualizer
-modeSel.addEventListener("change", () => viz && viz.setOptions({ mode: modeSel.value }));
-intensityEl.addEventListener("input", () => viz && viz.setOptions({ intensity: parseFloat(intensityEl.value) }));
-strobeEl.addEventListener("change", () => viz && viz.setOptions({ strobe: strobeEl.checked }));
-colorInput.addEventListener("input", () => viz && viz.setOptions({ color: colorInput.value }));
-
-// Gestionare Fundaluri
-bgTypeSel.addEventListener("change", () => {
-  if (bgTypeSel.value === 'solid') { bgColor1Wrap.style.display = 'inline-flex'; bgColor2Wrap.style.display = 'none'; bgImageWrap.style.display = 'none'; }
-  else if (bgTypeSel.value === 'gradient') { bgColor1Wrap.style.display = 'inline-flex'; bgColor2Wrap.style.display = 'inline-flex'; bgImageWrap.style.display = 'none'; }
-  else { bgColor1Wrap.style.display = 'none'; bgColor2Wrap.style.display = 'none'; bgImageWrap.style.display = 'inline-flex'; }
-  viz && viz.setBackground({ type: bgTypeSel.value, color1: bgColor1.value, color2: bgColor2.value });
-});
-bgColor1.addEventListener("input", () => viz && viz.setBackground({ type: bgTypeSel.value, color1: bgColor1.value, color2: bgColor2.value }));
-bgColor2.addEventListener("input", () => viz && viz.setBackground({ type: bgTypeSel.value, color1: bgColor1.value, color2: bgColor2.value }));
-bgImageInput.addEventListener("change", (e) => { const f = e.target.files[0]; if (f && viz) { viz.setBackground({ type: 'image' }); viz.setBackgroundImage(URL.createObjectURL(f)); } });
-
-// ── Înregistrare și Export WebM ───────────────────────────────────────────────
-function startRecording() {
-  recChunks = [];
-  const stream = canvas.captureStream(30);
-  if (mediaDest) {
-    const audioTracks = mediaDest.stream.getAudioTracks();
-    if (audioTracks.length) stream.addTrack(audioTracks[0]);
-  }
-  recorder = new MediaRecorder(stream, { mimeType: "video/webm;codecs=vp9,opus" });
-  recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recChunks.push(e.data); };
-  recorder.onstop = () => {
-    const blob = new Blob(recChunks, { type: "video/webm" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = exportMode ? "export.webm" : "recording.webm";
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    exportMode = false;
-  };
-  recorder.start();
-  btnRecord.textContent = "Stop Rec";
-}
-function stopRecording() { if (recorder) recorder.stop(); btnRecord.textContent = "Record"; }
-
-btnRecord.addEventListener("click", async () => {
-  ensureAudio(); if (!recorder || recorder.state === "inactive") { await ac.resume(); startRecording(); } else stopRecording();
-});
-
-btnExport.addEventListener("click", async () => {
-  ensureAudio(); if (!clips.length) return; await ac.resume(); exportMode = true;
-  if (current.index === -1) await playIndex(0);
-  if (current.audio) {
-    try { current.audio.pause(); } catch {}
-    current.audio.currentTime = 0;
-    await current.audio.play();
-    playing = true; btnPlay.textContent = "Pause";
-  }
-  if (!recorder || recorder.state === "inactive") startRecording();
-});
-
-// Loop Rulare Grafică Canvas
-function loop(t) {
-  const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
-  const w = canvas.width / dpr, h = canvas.height / dpr;
-  if (viz) viz.render(w, h, dt);
-  drawOverlay(w, h, dt);
-  requestAnimationFrame(loop);
-}
-requestAnimationFrame(loop);
+  if (file && viz)
