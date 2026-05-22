@@ -1,75 +1,32 @@
-```html
 <!doctype html>
-<html lang="en">
+<html lang="ro">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>DJ Visualizer Studio</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>Custom Visualizer</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-
-<div id="ui">
-
-  <div class="top-controls">
-
-    <label class="btn upload-btn">
-      + ADD SONG
-      <input id="file-input" type="file" accept="audio/*" multiple hidden>
-    </label>
-
-    <label class="btn upload-btn">
-      + LOGO ADD
-      <input id="logo-input" type="file" accept="image/*,video/*" hidden>
-    </label>
-
-    <label class="btn upload-btn">
-      + BG IMAGE / VIDEO
-      <input id="bg-input" type="file" accept="image/*,video/*" hidden>
-    </label>
-
-    <button id="play-all" class="btn">PLAY</button>
-    <button id="pause-all" class="btn">PAUSE</button>
-    <button id="stop-all" class="btn stop-btn">STOP</button>
-
+  <div id="ui">
+    <div class="controls">
+      <label class="button">
+        + Add Clip
+        <input id="file-input" type="file" accept="audio/*,video/*" multiple hidden>
+      </label>
+      <button id="playpause">Play</button>
+      <button id="stop">Stop</button>
+      <select id="audio-device">
+        <option value="">🎤 Default Mic</option>
+      </select>
+      <button id="mic-listen">🎤 Listen Mic</button>
+      
+      <input id="overlay-text" type="text" placeholder="Text..." maxlength="50">
+      <button id="apply-text">Add Text</button>
+    </div>
+    <ul id="clip-list"></ul>
   </div>
-
-  <div class="text-panel">
-
-    <input id="overlay-text" type="text" placeholder="Write text here...">
-
-    <label>
-      TEXT SIZE
-      <input id="text-size" type="range" min="20" max="140" value="70">
-    </label>
-
-    <label>
-      TEXT COLOR
-      <input id="text-color" type="color" value="#ffffff">
-    </label>
-
-    <button id="show-text" class="btn">SHOW TEXT</button>
-
-  </div>
-
-  <div class="mic-panel">
-
-    <select id="mic-select"></select>
-
-    <button id="enable-mic" class="btn">
-      ENABLE MIC
-    </button>
-
-  </div>
-
-  <ul id="playlist"></ul>
-
-</div>
-
-<canvas id="canvas"></canvas>
-
-<script type="module" src="app.js"></script>
-
+  
+  <canvas id="canvas"></canvas>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
-```
