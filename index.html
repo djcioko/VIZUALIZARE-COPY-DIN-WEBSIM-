@@ -25,22 +25,49 @@
         <input id="scroll-image" type="file" accept="image/*" hidden>
       </label>
       
-      <!-- Selectare Placă de sunet / Microfon -->
+      <!-- Selectare Sursă Audio Hardware -->
       <select id="audio-source-select">
         <option value="files">Mode: File Playlist</option>
-        <!-- Dispozitivele hardware vor fi injectate aici din JS -->
       </select>
 
       <button id="prev">Prev</button>
       <button id="playpause">Play</button>
-      <button id="stop">Stop</button> <!-- Buton nou de Stop -->
+      <button id="stop">Stop</button>
       <button id="next">Next</button>
       
+      <!-- Toate cele 30+ moduri originale din codul tău -->
       <select id="mode">
         <option value="bars">Bars</option>
         <option value="radial">Radial</option>
         <option value="wave">Waveform</option>
-        <!-- ... restul opțiunilor tale de moduri rămân neschimbate ... -->
+        <option value="particles">Particles</option>
+        <option value="spiral">Spiral</option>
+        <option value="rings">Rings</option>
+        <option value="mirror">Mirror Wave</option>
+        <option value="radialwave">Radial + Waveform</option>
+        <option value="radialspiral">Radial + Spiral</option>
+        <option value="radialcircles">Radial + Expanding Circles</option>
+        <option value="radialgrid">Radial + Grid</option>
+        <option value="barswave">Bars + Waveform</option>
+        <option value="spiralgrid">Spiral + Grid</option>
+        <option value="ringswave">Rings + Waveform</option>
+        <option value="vortexparticles">Vortex + Particles</option>
+        <option value="mirrorcircles">Mirror + Circles</option>
+        <option value="circles">Expanding Circles</option>
+        <option value="vortex">Vortex</option>
+        <option value="grid">Grid</option>
+        <option value="starfield">Starfield</option>
+        <option value="horizon">Horizon</option>
+        <option value="lissajous">Lissajous</option>
+        <option value="blobs">Blobs</option>
+        <option value="spectrumdots">Spectrum Dots</option>
+        <option value="hex">Hex Rings</option>
+        <option value="wavetunnel">Wave Tunnel</option>
+        <option value="jumbled">Jumbled Mess</option>
+        <option value="triangles">Triangle Fan</option>
+        <option value="orbitals">Orbitals</option>
+        <option value="ripple">Audio Ripple</option>
+        <option value="water">Water</option>
       </select>
       
       <label class="inline">
@@ -75,7 +102,7 @@
       </label>
     </div>
 
-    <!-- Zona de text curat pentru piesa curentă / starea sursei -->
+    <!-- Text afisaj curat piesa / stare curenta -->
     <div id="current-track-display" style="font-size: 14px; font-weight: 600; color: #4EF05D; margin-top: 5px;">
       Sursă: Nicio piesă încărcată
     </div>
