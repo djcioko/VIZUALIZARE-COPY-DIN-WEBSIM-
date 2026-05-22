@@ -1,115 +1,82 @@
 <!doctype html>
-<html lang="en">
+<html lang="ro">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Custom Song Visualizer</title>
+  <title>Video Mixer - Stabil</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; height: 100%; background: #000; color: #fff; font-family: "Noto Sans", sans-serif; overflow: hidden; }
+    #ui { position: fixed; top: 0; left: 0; right: 0; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: linear-gradient(180deg, rgba(0,0,0,0.85), rgba(0,0,0,0)); z-index: 10; }
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .button, button, select, input[type="text"], input[type="number"] { background: #111; border: 1px solid #333; color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .button:hover, button:hover { background: #222; border-color: #555; }
+    #stop { border-color: #5a1a1a; color: #ff6b6b; }
+    #clip-list { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; overflow-x: auto; }
+    #clip-list li { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 6px; padding: 6px 10px; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+    #clip-list li.active { outline: 2px solid #fff; background: rgba(255,255,255,.15); }
+    #canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 1; }
+    .inline { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  </style>
 </head>
 <body>
+
   <div id="ui">
     <div class="controls">
       <label class="button">
         + Add Clip
         <input id="file-input" type="file" accept="audio/*,video/*" multiple hidden>
       </label>
+      
       <label class="button">
         + Center Media
         <input id="image-input" type="file" accept="image/*,video/*" hidden>
       </label>
-      <label class="button">
-        + Scrolling Image
-        <input id="scroll-image" type="file" accept="image/*" hidden>
-      </label>
-      <button id="add-suggestion">Add Suggestion Image</button>
-      <button id="prev">Prev</button>
+
+      <button id="prev">⏮</button>
       <button id="playpause">Play</button>
       <button id="stop">Stop</button>
-      <button id="record">Record</button>
-      <button id="export">Export Video</button>
-      <button id="next">Next</button>
+      <button id="next">⏭</button>
 
-      <select id="audio-device" title="Audio Input Device">
+      <select id="audio-device" title="Selectează Microfon">
         <option value="">🎤 Default Mic</option>
       </select>
-      <button id="mic-listen">🎤 Listen Mic</button>
+      <button id="mic-listen">🎤 Start Mic</button>
 
-      <label class="inline">
-        <input id="overlay-text" type="text" placeholder="Overlay text..." maxlength="80">
-      </label>
-      <button id="apply-text">Add Text</button>
+      <input id="overlay-text" type="text" placeholder="Scrie text aici..." value="DJ CIOKO MUSIC">
+      <div class="inline">
+        Size: <input id="text-size" type="number" min="10" max="150" value="45" style="width: 50px;">
+      </div>
 
       <select id="mode">
-        <option value="bars">Bars</option>
-        <option value="radial">Radial</option>
-        <option value="wave">Waveform</option>
-        <option value="particles">Particles</option>
-        <option value="spiral">Spiral</option>
-        <option value="rings">Rings</option>
-        <option value="mirror">Mirror Wave</option>
-        <option value="radialwave">Radial + Waveform</option>
-        <option value="radialspiral">Radial + Spiral</option>
-        <option value="radialcircles">Radial + Expanding Circles</option>
-        <option value="radialgrid">Radial + Grid</option>
-        <option value="barswave">Bars + Waveform</option>
-        <option value="spiralgrid">Spiral + Grid</option>
-        <option value="ringswave">Rings + Waveform</option>
-        <option value="vortexparticles">Vortex + Particles</option>
-        <option value="mirrorcircles">Mirror + Circles</option>
-        <option value="circles">Expanding Circles</option>
-        <option value="vortex">Vortex</option>
-        <option value="grid">Grid</option>
-        <option value="starfield">Starfield</option>
-        <option value="horizon">Horizon</option>
-        <option value="lissajous">Lissajous</option>
-        <option value="blobs">Blobs</option>
-        <option value="spectrumdots">Spectrum Dots</option>
-        <option value="hex">Hex Rings</option>
-        <option value="wavetunnel">Wave Tunnel</option>
-        <option value="jumbled">Jumbled Mess</option>
-        <option value="triangles">Triangle Fan</option>
-        <option value="orbitals">Orbitals</option>
-        <option value="ripple">Audio Ripple</option>
-        <option value="water">Water</option>
+        <option value="bars">1. Bars (Bare Clasice)</option>
+        <option value="radial">2. Radial Circle</option>
+        <option value="wave">3. Waveform Line</option>
+        <option value="particles">4. Audio Particles</option>
+        <option value="spiral">5. Spiral Tuner</option>
+        <option value="rings">6. Reactive Rings</option>
+        <option value="mirror">7. Mirror Spectrum</option>
+        <option value="circles">8. Expanding Circles</option>
+        <option value="starfield">9. Starfield Tunnel</option>
+        <option value="blobs">10. Organic Blobs</option>
       </select>
       
-      <label class="inline">
+      <div class="inline">
         Intensity
         <input id="intensity" type="range" min="0.5" max="3" step="0.1" value="1.5">
-      </label>
-      <label class="inline">
-        Color
-        <input id="viz-color" type="color" value="#ffffff">
-      </label>
-      <label class="inline">
-        <input id="strobe" type="checkbox" checked>
-        Strobe
-      </label>
+      </div>
       
-      <select id="bg-type" title="Background Type">
-        <option value="solid">Solid</option>
-        <option value="gradient">Gradient</option>
-        <option value="image">Image</option>
-      </select>
-      <label class="inline" id="bg-color1-wrap">
-        BG Color 1
-        <input id="bg-color1" type="color" value="#000000">
-      </label>
-      <label class="inline" id="bg-color2-wrap">
-        BG Color 2
-        <input id="bg-color2" type="color" value="#202020">
-      </label>
-      <label class="button" id="bg-image-wrap">
-        + Background Image
-        <input id="bg-image" type="file" accept="image/*" hidden>
-      </label>
+      <input id="viz-color" type="color" value="#ffffff">
     </div>
+    
     <ul id="clip-list"></ul>
   </div>
+
   <canvas id="canvas"></canvas>
-  <script type="module" src="./app.js"></script>
+
+  <script src="./app.js"></script>
 </body>
 </html>
