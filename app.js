@@ -1,4 +1,4 @@
-// ── MOTORUL VIZUAL INTEGRAT DIRECT ──
+// ── MOTOR VIZUAL INTEGRAT DIRECT ──
 class VisualizerManager {
   constructor(ctx, analyser, options) {
     this.ctx = ctx;
@@ -7,17 +7,22 @@ class VisualizerManager {
     this.bufferLength = analyser.frequencyBinCount;
     this.dataArray = new Uint8Array(this.bufferLength);
     this.centerMedia = null;
-    this.scrollingImage = null;
-    this.scrollX = 0;
   }
   setOptions(opts) { Object.assign(this.options, opts); }
   setBackground(bg) { Object.assign(this.options.background, bg); }
-  setCenterMedia(url, type) { this.centerMedia = { url, type, el: null }; if(type==='video'){const v=document.createElement('video');v.src=url;v.loop=true;v.muted=true;v.play().catch(()=>{});this.centerMedia.el=v;}else{const img=new Image();img.src=url;this.centerMedia.el=img;} }
-  setScrollingImage(url) { const img=new Image();img.src=url;this.scrollingImage=img; }
+  setCenterMedia(url, type) { 
+    this.centerMedia = { url, type, el: null }; 
+    if(type==='video'){
+      const v = document.createElement('video'); v.src = url; v.loop = true; v.muted = true; v.play().catch(()=>{}); this.centerMedia.el = v;
+    } else {
+      const img = new Image(); img.src = url; this.centerMedia.el = img;
+    } 
+  }
   
   render(w, h, dt) {
     this.analyser.getByteFrequencyData(this.dataArray);
     
+    // Desenare Fundal
     const bg = this.options.background;
     if (bg.type === 'gradient') {
       const grad = this.ctx.createLinearGradient(0, 0, 0, h);
@@ -28,17 +33,6 @@ class VisualizerManager {
       this.ctx.fillStyle = bg.color1 || '#000000';
     }
     this.ctx.fillRect(0, 0, w, h);
-
-    if (this.scrollingImage && this.scrollingImage.complete) {
-      this.scrollX += dt * 40;
-      if (this.scrollX > this.scrollingImage.width) this.scrollX = 0;
-      this.ctx.save();
-      this.ctx.globalAlpha = 0.3;
-      for (let x = -this.scrollX; x < w; x += this.scrollingImage.width) {
-        this.ctx.drawImage(this.scrollingImage, x, 0, this.scrollingImage.width, h);
-      }
-      this.ctx.restore();
-    }
 
     this.ctx.save();
     const mode = this.options.mode;
@@ -78,6 +72,7 @@ class VisualizerManager {
       this.ctx.lineTo(w, h / 2);
       this.ctx.stroke();
     } else {
+      // Mod Standard: BARS
       const barWidth = (w / 64);
       let x = 0;
       for (let i = 0; i < 64; i++) {
@@ -109,10 +104,8 @@ const ctx = canvas.getContext("2d", { alpha: false });
 let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
 function resize() {
   const { innerWidth: w, innerHeight: h } = window;
-  canvas.style.width = w + "px";
-  canvas.style.height = h + "px";
-  canvas.width = Math.floor(w * dpr);
-  canvas.height = Math.floor(h * dpr);
+  canvas.style.width = w + "px"; canvas.style.height = h + "px";
+  canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 resize();
@@ -153,93 +146,87 @@ function ensureAudio() {
   analyser = ac.createAnalyser();
   analyser.fftSize = 2048;
   analyser.smoothingTimeConstant = 0.82;
-  gainA = ac.createGain();
-  gainB = ac.createGain();
-  gainA.gain.value = 1;
-  gainB.gain.value = 0;
+  gainA = ac.createGain(); gainA.gain.value = 1;
+  gainB = ac.createGain(); gainB.gain.value = 0;
 
   const merger = ac.createGain();
-  gainA.connect(merger);
-  gainB.connect(merger);
-  merger.connect(analyser);
-  analyser.connect(ac.destination);
+  gainA.connect(merger); gainB.connect(merger);
+  merger.connect(analyser); analyser.connect(ac.destination);
 
   viz = new VisualizerManager(ctx, analyser, {
-    mode: modeSel.value,
-    intensity: parseFloat(intensityEl.value),
-    color: colorInput?.value || "#ffffff",
-    background: {
-      type: bgTypeSel.value,
-      color1: bgColor1.value,
-      color2: bgColor2.value,
-    }
+    mode: modeSel.value, intensity: parseFloat(intensityEl.value), color: colorInput.value,
+    background: { type: bgTypeSel.value, color1: bgColor1.value, color2: bgColor2.value }
   });
 }
 
-// ── CITIRE ȘI SCHIMBARE CORECTĂ AUDIO SOURCE DIN LAPTOP ──
+// ── CITIREA DISPOZITIVELOR LA CERERE (Previne blocarea browserului) ──
 async function populateAudioDevices() {
   try {
-    await navigator.mediaDevices.getUserMedia({ audio: true }).then(s => s.getTracks().forEach(t => t.stop()));
     const devices = await navigator.mediaDevices.enumerateDevices();
     const audioInputs = devices.filter(d => d.kind === "audioinput");
     
     audioDeviceSel.innerHTML = "";
+    if(audioInputs.length === 0 || (audioInputs.length === 1 && !audioInputs[0].label)) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "🎤 Default Laptop Mic (Apasă Listen)";
+      audioDeviceSel.appendChild(opt);
+      return;
+    }
+
     audioInputs.forEach((d, i) => {
       const opt = document.createElement("option");
       opt.value = d.deviceId;
       opt.textContent = d.label || `Sursă Audio ${i + 1}`;
       audioDeviceSel.appendChild(opt);
     });
-  } catch (err) { console.warn("Eroare la citirea listei audio:", err); }
+  } catch (err) { console.warn("Nu s-au putut lista dispozitivele:", err); }
 }
-populateAudioDevices();
-navigator.mediaDevices.addEventListener("devicechange", populateAudioDevices);
 
-// Re-legare dinamică la schimbarea selecției din drop-down în timp ce mic-ul merge
-audioDeviceSel.addEventListener("change", async () => {
-  if (micListening) {
-    // Repornim stream-ul automat pe noua placă/sursă aleasă
-    stopMicHardware();
-    startMicStream();
-  }
-});
-
+// Pornirea microfonului / sursei externe
 async function startMicStream() {
   ensureAudio();
   if (ac.state === "suspended") await ac.resume();
   stopAllMediaClips();
   
-  const chosenDeviceId = audioDeviceSel.value;
-  const constraints = {
-    audio: chosenDeviceId ? { deviceId: { exact: chosenDeviceId } } : true
-  };
-
   try {
+    // Cerem permisiunea abia când utilizatorul apasă activ pe buton
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // După ce avem permisiunea, actualizăm imediat lista cu numele reale din laptop
+    await populateAudioDevices();
+    stream.getTracks().forEach(t => t.stop()); // Închidem stream-ul temporar de test
+
+    const chosenDeviceId = audioDeviceSel.value;
+    const constraints = { audio: chosenDeviceId ? { deviceId: { exact: chosenDeviceId } } : true };
+
     micStream = await navigator.mediaDevices.getUserMedia(constraints);
     micSource = ac.createMediaStreamSource(micStream);
     micSource.connect(analyser);
+    
     micListening = true;
     playing = true;
     btnMicListen.textContent = "🛑 Stop Mic";
     btnMicListen.classList.add("active");
     
-    const label = audioDeviceSel.options[audioDeviceSel.selectedIndex]?.textContent || "Microfon";
-    trackDisplay.textContent = `Sursă activată din laptop: ${label}`;
+    const label = audioDeviceSel.options[audioDeviceSel.selectedIndex]?.textContent || "Sursă Laptop Activă";
+    trackDisplay.textContent = `Sursă activă: ${label}`;
   } catch (err) {
-    alert("Nu s-a putut deschide sursa selectată: " + err.message);
-    micListening = false;
-    btnMicListen.textContent = "🎤 Listen Mic";
-    btnMicListen.classList.remove("active");
+    alert("Permite accesul la microfon în browser pentru a citi sursele din laptop!");
+    console.error(err);
   }
 }
 
 btnMicListen.addEventListener("click", () => {
   if (micListening) {
     stopMicHardware();
-    trackDisplay.textContent = "Sursă: Playlist";
+    trackDisplay.textContent = "Sursă: Oprită (Așteptare Playlist)";
   } else {
     startMicStream();
   }
+});
+
+audioDeviceSel.addEventListener("change", () => {
+  if (micListening) { stopMicHardware(); startMicStream(); }
 });
 
 function stopMicHardware() {
@@ -252,10 +239,10 @@ function stopMicHardware() {
 
 function stopAllMediaClips() {
   if (current.audio) { current.audio.pause(); try { current.audio.currentTime = 0; } catch{} }
-  playing = false;
-  btnPlay.textContent = "Play";
+  playing = false; btnPlay.textContent = "Play";
 }
 
+// ── PLAYLIST ȘI ADĂUGARE MELODII ──
 function addClip(file) {
   const url = URL.createObjectURL(file);
   const isVideo = (file.type || "").startsWith("video") || /\.mp4$/i.test(file.name);
@@ -263,7 +250,7 @@ function addClip(file) {
   renderList();
   if (current.index === -1) {
     current.index = 0;
-    trackDisplay.textContent = `Piesă pregătită: ${file.name}`;
+    trackDisplay.textContent = `Piesă adăugată: ${file.name} (Apasă pe ▶)`;
   }
 }
 
@@ -273,7 +260,6 @@ fileInput.addEventListener("change", (e) => {
   fileInput.value = "";
 });
 
-// ── RENDER LISTĂ PIESE CU BUTOANE PLAY ȘI STOP ÎN DREAPTA ──
 function renderList() {
   listEl.innerHTML = "";
   clips.forEach((c, i) => {
@@ -281,7 +267,7 @@ function renderList() {
     if (i === current.index && !micListening) li.classList.add("active");
     
     const nameSpan = document.createElement("span");
-    nameSpan.textContent = truncate(c.name, 24);
+    nameSpan.textContent = truncate(c.name, 22);
     li.appendChild(nameSpan);
 
     const actionWrap = document.createElement("div");
@@ -289,19 +275,14 @@ function renderList() {
     actionWrap.style.gap = "6px";
     actionWrap.style.marginLeft = "12px";
 
-    // Buton ▶ lângă track
     const itemPlay = document.createElement("button");
     itemPlay.textContent = "▶";
-    itemPlay.style.padding = "2px 6px";
-    itemPlay.style.fontSize = "11px";
+    itemPlay.style.padding = "2px 6px"; itemPlay.style.fontSize = "11px";
     itemPlay.addEventListener("click", () => { stopMicHardware(); playIndex(i); });
 
-    // Buton ⏹ lângă track
     const itemStop = document.createElement("button");
     itemStop.textContent = "⏹";
-    itemStop.style.padding = "2px 6px";
-    itemStop.style.fontSize = "11px";
-    itemStop.style.color = "#ff6b6b";
+    itemStop.style.padding = "2px 6px"; itemStop.style.fontSize = "11px"; itemStop.style.color = "#ff6b6b";
     itemStop.addEventListener("click", () => { if(current.index === i) { stopAllMediaClips(); trackDisplay.textContent = "Sursă: Oprită"; } });
 
     actionWrap.appendChild(itemPlay);
@@ -330,8 +311,7 @@ async function playIndex(index) {
   try {
     if (ac.state === "suspended") await ac.resume();
     await media.play();
-    playing = true;
-    btnPlay.textContent = "Pause";
+    playing = true; btnPlay.textContent = "Pause";
     trackDisplay.textContent = `Sursă: ${clip.name}`;
   } catch(err) { console.error(err); }
 
@@ -345,9 +325,9 @@ btnPlay.addEventListener("click", async () => {
   if (micListening) stopMicHardware();
   if (!playing) {
     if (current.audio) current.audio.play(); else playIndex(current.index !== -1 ? current.index : 0);
-    btnPlay.textContent = "Pause"; playing = true;
+    playing = true; btnPlay.textContent = "Pause";
   } else {
-    if (current.audio) current.audio.pause(); btnPlay.textContent = "Play"; playing = false;
+    if (current.audio) current.audio.pause(); playing = false; btnPlay.textContent = "Play";
   }
 });
 
@@ -369,11 +349,20 @@ imageInput.addEventListener("change", (e) => {
 
 btnApplyText.addEventListener("click", () => { overlayText = overlayTextInput.value.trim(); });
 
+// Inițializare starter dispozitive la încărcare primară securizată
+populateAudioDevices();
+
 function loop(t) {
   const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
   const w = canvas.width / dpr, h = canvas.height / dpr;
-  if (playing || micListening) { if (viz) viz.render(w, h, dt); } else { ctx.fillStyle = bgColor1.value || "#000000"; ctx.fillRect(0, 0, w, h); }
-  if (overlayText) { ctx.save(); ctx.fillStyle = "#fff"; ctx.font = "30px Arial"; ctx.textAlign = "center"; ctx.fillText(overlayText, w/2, h - 50); ctx.restore(); }
+  if (playing || micListening) { 
+    if (viz) viz.render(w, h, dt); 
+  } else { 
+    ctx.fillStyle = bgColor1.value || "#000000"; ctx.fillRect(0, 0, w, h); 
+  }
+  if (overlayText) { 
+    ctx.save(); ctx.fillStyle = "#fff"; ctx.font = "30px Arial"; ctx.textAlign = "center"; ctx.fillText(overlayText, w/2, h - 50); ctx.restore(); 
+  }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
