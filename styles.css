@@ -1,11 +1,20 @@
-#clip-list li {
-  background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(255, 255, 255, .12);
-  border-radius: 10px;
-  padding: 6px 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between; /* Împinge numele în stânga și butoanele în dreapta */
-  gap: 12px;
-  white-space: nowrap;
+:root { color-scheme: dark; }
+html, body { margin: 0; height: 100%; background: #000; color: #fff; font-family: "Noto Sans", system-ui, -apple-system, sans-serif; overflow: hidden; }
+#ui { position: fixed; top: 0; left: 0; right: 0; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0) 100%); pointer-events: auto; z-index: 999; }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.button, button { background: #141414; border: 1px solid #282828; color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.button:hover, button:hover { background: #222; border-color: #555; }
+#stop { border-color: #6a1b1b; color: #ff6b6b; }
+#mic-listen.active { background: #4a0808; border-color: #dd2222; animation: pulseRed 1.5s infinite; }
+select, input[type="range"] { background: #0a0a0a; color: #fff; border: 1px solid #333; border-radius: 6px; padding: 6px; font-size: 12px; }
+.inline { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+#clip-list { list-style: none; margin: 6px 0 0 0; padding: 0; display: flex; gap: 8px; overflow-x: auto; }
+#clip-list li { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 6px 10px; display: inline-flex; align-items: center; justify-content: space-between; font-size: 12px; color: #eee; }
+#clip-list li.active { border-color: #4EF05D; background: rgba(78, 240, 93, 0.12); box-shadow: 0 0 6px rgba(78,240,93,0.3); }
+#canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 1; }
+
+@keyframes pulseRed {
+  0% { box-shadow: 0 0 0 0 rgba(221, 34, 34, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(221, 34, 34, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(221, 34, 34, 0); }
 }
