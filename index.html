@@ -1,9 +1,12 @@
 <!doctype html>
-<html lang="ro">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Custom Visualizer</title>
+  <title>Custom Song Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -13,19 +16,72 @@
         + Add Clip
         <input id="file-input" type="file" accept="audio/*,video/*" multiple hidden>
       </label>
-      <button id="playpause">Play</button>
-      <button id="stop">Stop</button>
-      <select id="audio-device">
-        <option value="">🎤 Default Mic</option>
-      </select>
-      <button id="mic-listen">🎤 Listen Mic</button>
+      <label class="button">
+        + Center Media
+        <input id="image-input" type="file" accept="image/*,video/*" hidden>
+      </label>
+      <label class="button">
+        + Scrolling Image
+        <input id="scroll-image" type="file" accept="image/*" hidden>
+      </label>
       
-      <input id="overlay-text" type="text" placeholder="Text..." maxlength="50">
-      <button id="apply-text">Add Text</button>
+      <!-- Selectare Placă de sunet / Microfon -->
+      <select id="audio-source-select">
+        <option value="files">Mode: File Playlist</option>
+        <!-- Dispozitivele hardware vor fi injectate aici din JS -->
+      </select>
+
+      <button id="prev">Prev</button>
+      <button id="playpause">Play</button>
+      <button id="stop">Stop</button> <!-- Buton nou de Stop -->
+      <button id="next">Next</button>
+      
+      <select id="mode">
+        <option value="bars">Bars</option>
+        <option value="radial">Radial</option>
+        <option value="wave">Waveform</option>
+        <!-- ... restul opțiunilor tale de moduri rămân neschimbate ... -->
+      </select>
+      
+      <label class="inline">
+        Intensity
+        <input id="intensity" type="range" min="0.5" max="3" step="0.1" value="1.5">
+      </label>
+      <label class="inline">
+        Color
+        <input id="viz-color" type="color" value="#ffffff">
+      </label>
+      <label class="inline">
+        <input id="strobe" type="checkbox" checked>
+        Strobe
+      </label>
+      
+      <select id="bg-type" title="Background Type">
+        <option value="solid">Solid</option>
+        <option value="gradient">Gradient</option>
+        <option value="image">Image</option>
+      </select>
+      <label class="inline" id="bg-color1-wrap">
+        BG Color 1
+        <input id="bg-color1" type="color" value="#000000">
+      </label>
+      <label class="inline" id="bg-color2-wrap">
+        BG Color 2
+        <input id="bg-color2" type="color" value="#202020">
+      </label>
+      <label class="button" id="bg-image-wrap">
+        + Background Image
+        <input id="bg-image" type="file" accept="image/*" hidden>
+      </label>
     </div>
+
+    <!-- Zona de text curat pentru piesa curentă / starea sursei -->
+    <div id="current-track-display" style="font-size: 14px; font-weight: 600; color: #4EF05D; margin-top: 5px;">
+      Sursă: Nicio piesă încărcată
+    </div>
+
     <ul id="clip-list"></ul>
   </div>
-  
   <canvas id="canvas"></canvas>
   <script type="module" src="./app.js"></script>
 </body>
