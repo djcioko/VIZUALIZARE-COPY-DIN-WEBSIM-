@@ -34,6 +34,8 @@ const audioDeviceSel = document.getElementById("audio-device");
 const btnMicListen = document.getElementById("mic-listen");
 const overlayTextInput = document.getElementById("overlay-text");
 const btnApplyText = document.getElementById("apply-text");
+const trackDisplay = document.getElementById("current-track-display");
+
 // Background UI
 const bgTypeSel = document.getElementById("bg-type");
 const bgColor1 = document.getElementById("bg-color1");
@@ -113,11 +115,9 @@ function ensureAudio() {
 // ── Audio device enumeration ──────────────────────────────────────────────────
 async function populateAudioDevices() {
   try {
-    // Request permission first so labels are visible
     await navigator.mediaDevices.getUserMedia({ audio: true }).then(s => s.getTracks().forEach(t => t.stop()));
     const devices = await navigator.mediaDevices.enumerateDevices();
     const audioInputs = devices.filter(d => d.kind === "audioinput");
-    // Clear and rebuild
     audioDeviceSel.innerHTML = "";
     audioInputs.forEach((d, i) => {
       const opt = document.createElement("option");
@@ -139,14 +139,13 @@ btnMicListen.addEventListener("click", async () => {
   if (ac.state === "suspended") await ac.resume();
 
   if (micListening) {
-    // Stop mic
-    if (micSource) { micSource.disconnect(); micSource = null; }
-    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-    micListening = false;
-    btnMicListen.textContent = "🎤 Listen Mic";
-    btnMicListen.classList.remove("active");
+    stopMicHardware();
+    trackDisplay.textContent = current.audio ? `Sursă: ${clips[current.index].name}` : "Sursă: Oprită (Playlist)";
     return;
   }
+
+  // Oprim muzica MP3 complet dacă activăm microfonul ca să nu se suprapună grosolan
+  stopAllMediaClips();
 
   const deviceId = audioDeviceSel.value;
   const constraints = {
@@ -158,12 +157,24 @@ btnMicListen.addEventListener("click", async () => {
     micSource = ac.createMediaStreamSource(micStream);
     micSource.connect(analyser);
     micListening = true;
+    playing = true; // Permitem loop-ului de randare să citească datele
     btnMicListen.textContent = "🛑 Stop Mic";
     btnMicListen.classList.add("active");
+    
+    const selectedLabel = audioDeviceSel.options[audioDeviceSel.selectedIndex]?.textContent || "Microfon Extern";
+    trackDisplay.textContent = `Sursă Activă: ${selectedLabel}`;
   } catch (err) {
     alert("Nu s-a putut accesa microfonul: " + err.message);
   }
 });
+
+function stopMicHardware() {
+  if (micSource) { micSource.disconnect(); micSource = null; }
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  micListening = false;
+  btnMicListen.textContent = "🎤 Listen Mic";
+  btnMicListen.classList.remove("active");
+}
 
 // ── Text overlay ──────────────────────────────────────────────────────────────
 btnApplyText.addEventListener("click", () => {
@@ -195,7 +206,6 @@ function drawOverlay(w, h, dt) {
   ctx.font = `600 ${fontSize}px "Noto Sans", system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  // subtle shadow for readability
   ctx.shadowColor = "rgba(0,0,0,0.8)";
   ctx.shadowBlur = 20;
   ctx.fillStyle = "#ffffff";
@@ -209,7 +219,13 @@ function addClip(file) {
   const isVideo = (file.type || "").startsWith("video") || /\.mp4$/i.test(file.name);
   clips.push({ name: file.name, url, file, isVideo });
   renderList();
-  if (current.index === -1) playIndex(0);
+  
+  // FIX CRITIC: Nu mai dăm play automagically la index 0 când adaugi clipuri! 
+  // Doar setăm indexul ca fiind pregătit dacă nu cântă nimic altceva, fără auto-start haotic.
+  if (current.index === -1) {
+    current.index = 0;
+    trackDisplay.textContent = `Sursă selectată: ${file.name} (Apasă Play)`;
+  }
 }
 
 fileInput.addEventListener("change", (e) => {
@@ -250,10 +266,21 @@ btnPlay.addEventListener("click", async () => {
   ensureAudio();
   if (!clips.length) return;
   if (ac.state === "suspended") await ac.resume();
+  
+  // Dacă ascultam la microfon, oprim streamul microfonului mai întâi ca să trecem pe piese
+  if (micListening) stopMicHardware();
+
   if (!playing) {
-    if (current.audio) current.audio.play();
+    if (current.audio) {
+      current.audio.play();
+    } else {
+      // Dacă nu era încărcată nicio piesă structural în nod, o încărcăm pe cea selectată curent
+      playIndex(current.index !== -1 ? current.index : 0);
+      return;
+    }
     btnPlay.textContent = "Pause";
     playing = true;
+    trackDisplay.textContent = `Sursă: ${clips[current.index].name}`;
   } else {
     if (current.audio) current.audio.pause();
     if (nextAudio) nextAudio.pause();
@@ -263,7 +290,7 @@ btnPlay.addEventListener("click", async () => {
 });
 
 // ── Stop ──────────────────────────────────────────────────────────────────────
-btnStop.addEventListener("click", () => {
+function stopAllMediaClips() {
   if (current.audio) {
     current.audio.pause();
     try { current.audio.currentTime = 0; } catch {}
@@ -274,17 +301,25 @@ btnStop.addEventListener("click", () => {
   }
   playing = false;
   btnPlay.textContent = "Play";
+}
+
+btnStop.addEventListener("click", () => {
+  stopAllMediaClips();
+  stopMicHardware();
+  trackDisplay.textContent = "Sursă: Oprită complet";
 });
 
 // ── Prev / Next ───────────────────────────────────────────────────────────────
 btnPrev.addEventListener("click", () => {
   if (!clips.length) return;
+  stopMicHardware();
   const idx = (current.index - 1 + clips.length) % clips.length;
   playIndex(idx);
 });
 
 btnNext.addEventListener("click", () => {
   if (!clips.length) return;
+  stopMicHardware();
   const idx = (current.index + 1) % clips.length;
   playIndex(idx);
 });
@@ -356,17 +391,23 @@ function renderList() {
   listEl.innerHTML = "";
   clips.forEach((c, i) => {
     const li = document.createElement("li");
-    if (i === current.index) li.classList.add("active");
+    if (i === current.index && !micListening) li.classList.add("active");
     const name = document.createElement("span");
     name.textContent = truncate(c.name, 28);
+    
     const playBtn = document.createElement("button");
     playBtn.className = "play";
     playBtn.textContent = "Play";
-    playBtn.addEventListener("click", () => playIndex(i));
+    playBtn.addEventListener("click", () => {
+      stopMicHardware();
+      playIndex(i);
+    });
+    
     const dlBtn = document.createElement("button");
     dlBtn.className = "download";
     dlBtn.textContent = "Download";
     dlBtn.addEventListener("click", () => downloadClip(c));
+    
     li.appendChild(playBtn);
     li.appendChild(dlBtn);
     li.appendChild(name);
@@ -382,13 +423,12 @@ function connectMediaElement(audioEl, toA = true) {
   return srcNode;
 }
 
-// ── Play index (fixed: stop previous cleanly before switching) ────────────────
+// ── Play index ────────────────────────────────────────────────────────────────
 async function playIndex(index) {
   ensureAudio();
   const clip = clips[index];
   if (!clip) return;
 
-  // Stop & detach previous audio cleanly to prevent ghost playback
   if (current.audio) {
     current.audio.pause();
     try { current.audio.currentTime = 0; } catch {}
@@ -407,7 +447,6 @@ async function playIndex(index) {
     else { btnNext.click(); }
   });
 
-  // Always route new track to gainA with full volume (no crossfade bleed)
   gainA.gain.cancelScheduledValues(ac.currentTime);
   gainB.gain.cancelScheduledValues(ac.currentTime);
   gainA.gain.setValueAtTime(1, ac.currentTime);
@@ -415,13 +454,14 @@ async function playIndex(index) {
 
   connectMediaElement(media, true);
 
-  if (playing || ac.state === "running") {
-    try {
-      if (ac.state === "suspended") await ac.resume();
-      await media.play();
-      playing = true;
-      btnPlay.textContent = "Pause";
-    } catch {}
+  try {
+    if (ac.state === "suspended") await ac.resume();
+    await media.play();
+    playing = true;
+    btnPlay.textContent = "Pause";
+    trackDisplay.textContent = `Sursă: ${clip.name}`;
+  } catch(err) {
+    console.error("Playback issue:", err);
   }
 
   nextAudio = null;
@@ -494,13 +534,11 @@ function loop(t) {
   lastT = t;
   const w = canvas.width / dpr, h = canvas.height / dpr;
   if (viz) viz.render(w, h, dt);
-  // Draw text overlay on top
   drawOverlay(w, h, dt);
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
-// Mobile autoplay notice
 if (/Mobi|Android/i.test(navigator.userAgent)) {
   const note = document.createElement("div");
   note.className = "notice";
