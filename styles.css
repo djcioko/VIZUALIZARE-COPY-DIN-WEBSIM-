@@ -1,11 +1,7 @@
-#clip-list li {
-  background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(255, 255, 255, .12);
-  border-radius: 10px;
-  padding: 6px 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between; /* Împinge numele în stânga și butoanele în dreapta */
-  gap: 12px;
-  white-space: nowrap;
-}
+body { margin: 0; background: #000; color: #fff; font-family: sans-serif; overflow: hidden; }
+#ui { position: fixed; top: 0; z-index: 10; padding: 10px; background: rgba(0,0,0,0.8); width: 100%; }
+.controls { display: flex; gap: 10px; }
+#canvas { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; }
+#clip-list { list-style: none; padding: 0; display: flex; gap: 10px; margin-top: 10px; }
+#clip-list li { background: #222; padding: 5px 10px; border-radius: 5px; display: flex; align-items: center; gap: 5px; }
+button { cursor: pointer; }
