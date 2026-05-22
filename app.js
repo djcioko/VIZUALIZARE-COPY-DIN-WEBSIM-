@@ -1,4 +1,4 @@
-// Application State
+// Global State Architecture
 const state = {
   audioContext: null,
   analyser: null,
@@ -8,19 +8,16 @@ const state = {
   currentIndex: -1,
   isPlaying: false,
   
-  // Surse Audio active
-  mediaElement: null,       // Pentru fișiere MP3/Video
-  sourceNode: null,         // Nodul audio pentru fișiere
-  streamSourceNode: null,   // Nodul audio pentru Microfon/SoundCard
-  activeStream: null,       // Stream-ul hardware activ
-  currentInputMode: 'files', // 'files' sau 'hardware'
+  mediaElement: null,       
+  sourceNode: null,         
+  streamSourceNode: null,   
+  activeStream: null,       
+  currentInputMode: 'files', 
 
-  // Custom Layer Assets
   centerMedia: null,
   scrollImage: null,
   bgImage: null,
 
-  // Configuration Sync
   intensity: 1.5,
   color: '#ffffff',
   strobe: true,
@@ -29,7 +26,7 @@ const state = {
   bgColor2: '#202020'
 };
 
-// DOM Elements
+// DOM Mapping
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = document.getElementById('file-input');
@@ -51,7 +48,6 @@ const scrollImageInput = document.getElementById('scroll-image');
 const audioSourceSelect = document.getElementById('audio-source-select');
 const trackDisplay = document.getElementById('current-track-display');
 
-// Handle Window Resizing
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -59,7 +55,6 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Initialise Audio Context & Analyser
 function initAudio() {
   if (state.audioContext) return;
   state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -69,39 +64,36 @@ function initAudio() {
   state.dataArray = new Uint8Array(state.bufferLength);
 }
 
-// --- SECȚIUNEA HARDWARE (MICROFON / PLACĂ SUNET) ---
+// Enumerate Microphones / Soundcards
 async function enumerateAudioDevices() {
   try {
-    // Cerem permisiune temporară pentru a putea citi etichetele corecte ale dispozitivelor
     await navigator.mediaDevices.getUserMedia({ audio: true });
     const devices = await navigator.mediaDevices.enumerateDevices();
     const audioInputs = devices.filter(device => device.kind === 'audioinput');
     
-    // Resetăm select-ul dar păstrăm prima opțiune pentru fișiere
     audioSourceSelect.innerHTML = '<option value="files">Mode: File Playlist</option>';
     
     audioInputs.forEach(device => {
       const option = document.createElement('option');
       option.value = device.deviceId;
-      option.textContent = device.label || `Dispozitiv Audio (${device.deviceId.substring(0, 5)})`;
+      option.textContent = device.label || `Audio Device (${device.deviceId.substring(0, 5)})`;
       audioSourceSelect.appendChild(option);
     });
   } catch (err) {
-    console.warn("Permisiunea audio a fost refuzată sau nu există dispozitive capturate:", err);
-    trackDisplay.textContent = "Sursă: Lipsă permisiuni microfon/sursă hardware.";
+    console.warn("Hardware permission blocked or unavailable:", err);
+    trackDisplay.textContent = "Sursă: Lipsă permisiuni microfon (rulează doar pe https://)";
   }
 }
 
-// Schimbarea sursei (Fișiere vs Soundcard Hardware)
 audioSourceSelect.addEventListener('change', async (e) => {
   initAudio();
   const val = e.target.value;
-
-  // Oprim orice rulare anterioară hardware sau fișier
   stopAllSources();
 
   if (val === 'files') {
     state.currentInputMode = 'files';
+    state.isPlaying = false;
+    playPauseBtn.textContent = 'Play';
     trackDisplay.textContent = state.currentIndex !== -1 ? `Sursă: ${state.playlist[state.currentIndex].name}` : "Sursă: Playlist Fișiere";
   } else {
     state.currentInputMode = 'hardware';
@@ -115,20 +107,18 @@ audioSourceSelect.addEventListener('change', async (e) => {
       state.audioContext.resume();
       
       state.isPlaying = true;
-      playPauseBtn.textContent = 'Pause';
+      playPauseBtn.textContent = 'Streaming';
       trackDisplay.textContent = `Sursă Activă: ${audioSourceSelect.options[audioSourceSelect.selectedIndex].text}`;
     } catch (err) {
-      console.error("Eroare la conectarea plăcii de sunet:", err);
+      console.error("Hardware connection failed:", err);
       trackDisplay.textContent = "Eroare la activarea hardware-ului.";
     }
   }
 });
 
-// Încărcare inițială a listei de dispozitive la pornire
 enumerateAudioDevices();
 
-
-// --- SECȚIUNEA PLAYLIST ȘI FIȘIERE ---
+// File Integration Loop
 fileInput.addEventListener('change', (e) => {
   initAudio();
   const files = Array.from(e.target.files);
@@ -141,9 +131,8 @@ fileInput.addEventListener('change', (e) => {
 
   updatePlaylistUI();
 
-  // Corecție critică: dacă deja cânta ceva, nu modificăm piesa curentă și nu resetăm playlist-ul în mod haotic.
   if (wasEmpty && state.playlist.length > 0) {
-    loadTrack(0, false); // Încarcă prima piesă dar NU îi da play automat direct.
+    loadTrack(0, false); 
   }
 });
 
@@ -154,11 +143,10 @@ function updatePlaylistUI() {
     li.textContent = track.name.length > 30 ? track.name.substring(0, 30) + '...' : track.name;
     if (index === state.currentIndex && state.currentInputMode === 'files') li.classList.add('active');
     
-    // Schimbare piesă direct la click pe element în listă
     li.addEventListener('click', () => {
       audioSourceSelect.value = 'files';
       state.currentInputMode = 'files';
-      loadTrack(index, true); // Încarcă și dă-i play imediat
+      loadTrack(index, true); 
     });
     clipListUI.appendChild(li);
   });
@@ -183,22 +171,22 @@ function loadTrack(index, autoPlay = false) {
   updatePlaylistUI();
   trackDisplay.textContent = `Sursă: ${track.name}`;
 
-  if (autoPlay || state.isPlaying) {
+  if (autoPlay) {
     state.audioContext.resume();
-    state.mediaElement.play().catch(err => console.log("Playback blocked:", err));
+    state.mediaElement.play().catch(err => console.log("Playback engine exception:", err));
     state.isPlaying = true;
     playPauseBtn.textContent = 'Pause';
+  } else {
+    state.isPlaying = false;
+    playPauseBtn.textContent = 'Play';
   }
 }
 
-// Funcție dedicată de Stop pentru curățarea completă a stream-urilor și fișierelor
 function stopAllSources() {
-  // Oprește fișierul audio/video
   if (state.mediaElement) {
     state.mediaElement.pause();
     state.mediaElement.currentTime = 0; 
   }
-  // Oprește stream-ul de microfon hardware ca să nu rămână ledul aprins la cameră/microfon
   if (state.activeStream) {
     state.activeStream.getTracks().forEach(track => track.stop());
     state.activeStream = null;
@@ -209,10 +197,9 @@ function stopAllSources() {
   }
 }
 
-// Controale media standard
 playPauseBtn.addEventListener('click', () => {
   initAudio();
-  if (state.currentInputMode === 'hardware') return; // Pe microfon nu avem pauză clasică, dăm stop din butonul dedicat.
+  if (state.currentInputMode === 'hardware') return; 
 
   if (!state.mediaElement && state.playlist.length > 0) loadTrack(0, true);
   if (!state.mediaElement) return;
@@ -228,7 +215,6 @@ playPauseBtn.addEventListener('click', () => {
   state.isPlaying = !state.isPlaying;
 });
 
-// Evenimentul pentru butonul nou de STOP
 stopBtn.addEventListener('click', () => {
   stopAllSources();
   state.isPlaying = false;
@@ -252,7 +238,6 @@ nextBtn.addEventListener('click', () => {
   } 
 });
 
-// Configurații vizuale
 intensityInput.addEventListener('input', (e) => state.intensity = parseFloat(e.target.value));
 colorInput.addEventListener('input', (e) => state.color = e.target.value);
 strobeInput.addEventListener('change', (e) => state.strobe = e.target.checked);
@@ -284,8 +269,7 @@ handleImageUpload(bgImageInput, 'bgImage');
 handleImageUpload(imageInput, 'centerMedia');
 handleImageUpload(scrollImageInput, 'scrollImage');
 
-
-// --- ENGINE-UL DE RENDER VIZUAL ---
+// --- 30+ MODES RENDER CORE MATRIX ---
 function render() {
   requestAnimationFrame(render);
 
@@ -300,7 +284,7 @@ function render() {
     audioLevel = (sum / state.bufferLength) / 255; 
   }
 
-  // Desenare fundal
+  // Draw Background Layer
   if (state.bgType === 'solid') {
     ctx.fillStyle = state.bgColor1;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -333,7 +317,6 @@ function render() {
     ctx.restore();
   }
 
-  // Moduri Visualizer
   const currentMode = modeSelect.value;
   ctx.strokeStyle = state.color;
   ctx.fillStyle = state.color;
@@ -343,49 +326,161 @@ function render() {
     const bars = state.bufferLength;
     const barWidth = canvas.width / bars;
 
-    if (currentMode === 'bars' || currentMode.includes('bars')) {
+    // 1. BARS PATTERNS
+    if (currentMode.includes('bars')) {
       for (let i = 0; i < bars; i++) {
         let height = state.dataArray[i] * state.intensity;
-        ctx.fillRect(i * barWidth, canvas.height - height, barWidth - 2, height);
+        if (currentMode === 'barswave') {
+          ctx.fillRect(i * barWidth, canvas.height - height, barWidth - 2, height);
+          let yWave = centerY + (state.dataArray[i] - 128) * state.intensity;
+          ctx.fillRect(i * barWidth, yWave, 2, 2);
+        } else {
+          ctx.fillRect(i * barWidth, canvas.height - height, barWidth - 2, height);
+        }
       }
     }
 
-    if (currentMode === 'radial' || currentMode.includes('radial')) {
-      const radius = 100 + (audioLevel * 50);
-      ctx.beginPath();
-      for (let i = 0; i < bars; i++) {
-        let angle = (i / bars) * Math.PI * 2;
-        let extRadius = radius + (state.dataArray[i] * state.intensity * 0.5);
-        let x1 = centerX + Math.cos(angle) * radius;
-        let y1 = centerY + Math.sin(angle) * radius;
-        let x2 = centerX + Math.cos(angle) * extRadius;
-        let y2 = centerY + Math.sin(angle) * extRadius;
-        
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
+    // 2. RADIAL / RINGS / SPHERES / VORTEX
+    if (currentMode.includes('radial') || currentMode.includes('vortex') || currentMode.includes('spiral') || currentMode.includes('rings') || currentMode === 'hex' || currentMode === 'circles') {
+      const radius = currentMode.includes('vortex') ? 10 : 100 + (audioLevel * 60);
+      
+      if (currentMode === 'hex') {
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(audioLevel * Math.PI);
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          let angle = (i / 6) * Math.PI * 2;
+          let r = radius + (state.dataArray[i * 10] || 0) * state.intensity * 0.3;
+          let x = Math.cos(angle) * r;
+          let y = Math.sin(angle) * r;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        for (let i = 0; i < bars; i++) {
+          let angle = (i / bars) * Math.PI * 2;
+          if (currentMode.includes('spiral')) {
+            angle = (i / bars) * Math.PI * 8 + (audioLevel * 2);
+          }
+          
+          let dataVal = state.dataArray[i];
+          let extRadius = radius + (dataVal * state.intensity * 0.6);
+          
+          let x1 = centerX + Math.cos(angle) * radius;
+          let y1 = centerY + Math.sin(angle) * radius;
+          let x2 = centerX + Math.cos(angle) * extRadius;
+          let y2 = centerY + Math.sin(angle) * extRadius;
+          
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+
+          if ((currentMode === 'radialcircles' || currentMode === 'circles') && i % 15 === 0) {
+            ctx.arc(centerX, centerY, dataVal * state.intensity * 0.8, 0, Math.PI * 2);
+          }
+          if (currentMode === 'radialgrid' && i % 8 === 0) {
+            ctx.moveTo(x1, 0); ctx.lineTo(x1, canvas.height);
+          }
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
     }
 
-    if (currentMode === 'wave' || currentMode.includes('wave')) {
+    // 3. WAVE / MIRROR / TUNNELS
+    if (currentMode.includes('wave') || currentMode.includes('mirror') || currentMode === 'wavetunnel' || currentMode === 'ripple') {
       ctx.beginPath();
       for (let i = 0; i < bars; i++) {
         let x = i * barWidth;
-        let y = centerY + (state.dataArray[i] - 128) * state.intensity;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        let offset = (state.dataArray[i] - 128) * state.intensity;
+        
+        if (currentMode === 'mirror' || currentMode === 'mirrorcircles') {
+          if (i === 0) {
+            ctx.moveTo(x, centerY - offset);
+          } else {
+            ctx.lineTo(x, centerY - offset);
+            ctx.lineTo(x, centerY + offset);
+          }
+        } else if (currentMode === 'wavetunnel') {
+          let rTunnel = (canvas.height * 0.4) * (i / bars) + offset;
+          ctx.arc(centerX, centerY, Math.max(1, rTunnel), 0, Math.PI * 2);
+        } else {
+          let y = centerY + offset;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
       }
       ctx.stroke();
     }
-    
-    if (!['bars', 'radial', 'wave'].some(m => currentMode.includes(m))) {
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, 50 + (audioLevel * 150), 0, Math.PI * 2);
-      ctx.stroke();
+
+    // 4. COMPLEX MATH GEOMETRY / PARTICLE SYSTEMS
+    if (['particles', 'vortexparticles', 'starfield', 'grid', 'spiralgrid', 'blobs', 'lissajous', 'spectrumdots', 'triangles', 'orbitals', 'horizon', 'water', 'jumbled'].includes(currentMode)) {
+      ctx.save();
+      
+      if (currentMode === 'jumbled' || currentMode === 'triangles') {
+        ctx.beginPath();
+        for (let i = 0; i < bars; i += 4) {
+          let factor = state.dataArray[i] * state.intensity;
+          ctx.lineTo(centerX + Math.sin(i) * factor, centerY + Math.cos(i) * factor);
+          if (currentMode === 'triangles') ctx.lineTo(centerX, centerY);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      } 
+      else if (currentMode === 'lissajous') {
+        ctx.beginPath();
+        let freq1 = (state.dataArray[5] || 1) * 0.05;
+        let freq2 = (state.dataArray[50] || 1) * 0.05;
+        for (let t = 0; t < Math.PI * 2; t += 0.05) {
+          let x = centerX + Math.sin(t * freq1) * (canvas.width * 0.3) * state.intensity;
+          let y = centerY + Math.cos(t * freq2) * (canvas.height * 0.3) * state.intensity;
+          if (t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      } 
+      else if (currentMode === 'grid' || currentMode === 'spiralgrid') {
+        let gridSize = 30;
+        for (let x = 0; x < canvas.width; x += gridSize) {
+          for (let y = 0; y < canvas.height; y += gridSize) {
+            let idx = Math.floor((x + y) % bars);
+            let pSize = (state.dataArray[idx] / 255) * state.intensity * 6;
+            ctx.fillRect(x, y, pSize, pSize);
+          }
+        }
+      } 
+      else {
+        for (let i = 0; i < bars; i += 2) {
+          let amp = state.dataArray[i] * state.intensity;
+          ctx.beginPath();
+          
+          let pX, pY;
+          if (currentMode === 'horizon') {
+            pX = (i / bars) * canvas.width;
+            pY = canvas.height - amp;
+          } else if (currentMode === 'spectrumdots' || currentMode === 'water') {
+            pX = (i / bars) * canvas.width;
+            pY = centerY + Math.sin(i + (audioLevel * 5)) * amp * 0.5;
+          } else { 
+            let angle = i * 0.5 + (audioLevel * 2);
+            pX = centerX + Math.cos(angle) * (amp * 1.2);
+            pY = centerY + Math.sin(angle) * (amp * 1.2);
+          }
+          
+          ctx.arc(pX, pY, Math.max(1, amp * 0.03), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
     }
+  } else {
+    // Idle state visual loop
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 80 + Math.sin(Date.now() * 0.002) * 5, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
-  // Imaginea Centrală
+  // Floating Center Media Thumbnail Layer
   if (state.centerMedia) {
     const size = 180 + (audioLevel * 40);
     ctx.save();
