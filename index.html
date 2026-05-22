@@ -24,18 +24,24 @@
         + Scrolling Image
         <input id="scroll-image" type="file" accept="image/*" hidden>
       </label>
-      
-      <!-- Selectare Sursă Audio Hardware -->
-      <select id="audio-source-select">
-        <option value="files">Mode: File Playlist</option>
-      </select>
-
+      <button id="add-suggestion">Add Suggestion Image</button>
       <button id="prev">Prev</button>
       <button id="playpause">Play</button>
       <button id="stop">Stop</button>
+      <button id="record">Record</button>
+      <button id="export">Export Video</button>
       <button id="next">Next</button>
-      
-      <!-- Toate cele 30+ moduri originale din codul tău -->
+
+      <select id="audio-device" title="Audio Input Device">
+        <option value="">🎤 Default Mic</option>
+      </select>
+      <button id="mic-listen">🎤 Listen Mic</button>
+
+      <label class="inline">
+        <input id="overlay-text" type="text" placeholder="Overlay text..." maxlength="80">
+      </label>
+      <button id="apply-text">Add Text</button>
+
       <select id="mode">
         <option value="bars">Bars</option>
         <option value="radial">Radial</option>
@@ -69,7 +75,6 @@
         <option value="ripple">Audio Ripple</option>
         <option value="water">Water</option>
       </select>
-      
       <label class="inline">
         Intensity
         <input id="intensity" type="range" min="0.5" max="3" step="0.1" value="1.5">
@@ -82,7 +87,6 @@
         <input id="strobe" type="checkbox" checked>
         Strobe
       </label>
-      
       <select id="bg-type" title="Background Type">
         <option value="solid">Solid</option>
         <option value="gradient">Gradient</option>
@@ -102,8 +106,7 @@
       </label>
     </div>
 
-    <!-- Text afisaj curat piesa / stare curenta -->
-    <div id="current-track-display" style="font-size: 14px; font-weight: 600; color: #4EF05D; margin-top: 5px;">
+    <div id="current-track-display" style="font-size: 13px; font-weight: 600; color: #4EF05D; padding: 2px 5px;">
       Sursă: Nicio piesă încărcată
     </div>
 
