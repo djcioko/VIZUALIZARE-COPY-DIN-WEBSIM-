@@ -1,11 +1,60 @@
-#clip-list li {
-  background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(255, 255, 255, .12);
-  border-radius: 10px;
-  padding: 6px 12px;
-  display: inline-flex;
+* {
+  color: white;
+  border: 1px solid #333;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+#playlist {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.track {
+  display: flex;
   align-items: center;
-  justify-content: space-between; /* Împinge numele în stânga și butoanele în dreapta */
-  gap: 12px;
+  gap: 10px;
+  background: rgba(255,255,255,0.08);
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.track.active {
+  border: 2px solid #00ffcc;
+}
+
+.track-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.track button {
+  min-width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: #222;
+  color: white;
+}
+
+.track button:hover {
+  background: #333;
+}
+
+@media(max-width:900px){
+
+  .top-controls,
+  .text-panel,
+  .mic-panel {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
 }
