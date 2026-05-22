@@ -32,13 +32,11 @@
       <button id="export">Export Video</button>
       <button id="next">Next</button>
 
-      <!-- Audio device selector -->
       <select id="audio-device" title="Audio Input Device">
         <option value="">🎤 Default Mic</option>
       </select>
       <button id="mic-listen">🎤 Listen Mic</button>
 
-      <!-- Text overlay instead of pickle -->
       <label class="inline">
         <input id="overlay-text" type="text" placeholder="Overlay text..." maxlength="80">
       </label>
@@ -89,7 +87,6 @@
         <input id="strobe" type="checkbox" checked>
         Strobe
       </label>
-      <!-- Background controls -->
       <select id="bg-type" title="Background Type">
         <option value="solid">Solid</option>
         <option value="gradient">Gradient</option>
@@ -108,6 +105,11 @@
         <input id="bg-image" type="file" accept="image/*" hidden>
       </label>
     </div>
+
+    <div id="current-track-display" style="font-size: 13px; font-weight: 600; color: #4EF05D; padding: 2px 5px;">
+      Sursă: Nicio piesă încărcată
+    </div>
+
     <ul id="clip-list"></ul>
   </div>
   <canvas id="canvas"></canvas>
