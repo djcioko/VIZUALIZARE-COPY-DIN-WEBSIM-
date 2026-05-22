@@ -71,7 +71,7 @@ let playing = false;
 let lastT = performance.now();
 let exportMode = false;
 
-// Show "hot page" popup on load
+// Show popup on load
 const popup = document.createElement("div");
 popup.className = "modal-overlay";
 popup.innerHTML = `<div class="modal-card"><strong>WE'RE ON THE HOT PAGE!</strong><button class="button close">OK</button></div>`;
@@ -160,7 +160,7 @@ btnMicListen.addEventListener("click", async () => {
   } catch (err) {
     alert("Nu s-a putut accesa microfonul: " + err.message);
   }
-}
+});
 
 // ── Text overlay ──────────────────────────────────────────────────────────────
 btnApplyText.addEventListener("click", () => {
@@ -364,139 +364,3 @@ function renderList() {
     dlBtn.textContent = "Download";
     dlBtn.addEventListener("click", () => downloadClip(c));
     li.appendChild(playBtn);
-    li.appendChild(dlBtn);
-    li.appendChild(name);
-    listEl.appendChild(li);
-  });
-}
-
-function truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
-
-function connectMediaElement(audioEl, toA = true) {
-  const srcNode = ac.createMediaElementSource(audioEl);
-  srcNode.connect(toA ? gainA : gainB);
-  return srcNode;
-}
-
-// ── Play index ────────────────
-async function playIndex(index) {
-  ensureAudio();
-  const clip = clips[index];
-  if (!clip) return;
-
-  if (current.audio) {
-    current.audio.pause();
-    try { current.audio.currentTime = 0; } catch {}
-  }
-
-  const media = clip.isVideo ? document.createElement("video") : new Audio();
-  Object.assign(media, {
-    src: clip.url,
-    preload: "auto",
-    crossOrigin: "anonymous",
-    loop: false,
-    playsInline: true
-  });
-  media.addEventListener("ended", () => {
-    if (exportMode) { stopRecording(); exportMode = false; }
-    else { btnNext.click(); }
-  });
-
-  gainA.gain.cancelScheduledValues(ac.currentTime);
-  gainB.gain.cancelScheduledValues(ac.currentTime);
-  gainA.gain.setValueAtTime(1, ac.currentTime);
-  gainB.gain.setValueAtTime(0, ac.currentTime);
-
-  connectMediaElement(media, true);
-
-  if (playing || ac.state === "running") {
-    try {
-      if (ac.state === "suspended") await ac.resume();
-      await media.play();
-      playing = true;
-      btnPlay.textContent = "Pause";
-    } catch {}
-  }
-
-  nextAudio = null;
-  current = { index, audio: media, _toB: false };
-  renderList();
-}
-
-function downloadClip(c) {
-  const a = document.createElement("a");
-  a.href = c.url;
-  a.download = c.name || "clip";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-// ── Recording ─────────────────────────────────────────────────────────────────
-function startRecording() {
-  const vs = canvas.captureStream(60), as = mediaDest.stream;
-  const stream = new MediaStream([...vs.getVideoTracks(), ...as.getAudioTracks()]);
-  recChunks = [];
-  const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus") ? "video/webm;codecs=vp9,opus" : "video/webm;codecs=vp8,opus";
-  recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6e6 });
-  recorder.ondataavailable = (e) => e.data && recChunks.push(e.data);
-  recorder.onstop = () => handleStop(mime);
-  recorder.start();
-  btnRecord.textContent = "Stop";
-}
-
-function handleStop(mime) {
-  const blob = new Blob(recChunks, { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  const base = (clips[current.index]?.name || "visualizer").replace(/\.[^/.]+$/, "");
-  a.href = url; a.download = `${base}-${Date.now()}.webm`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
-  btnRecord.textContent = "Record";
-}
-
-function stopRecording() { recorder && recorder.stop(); }
-
-btnRecord.addEventListener("click", async () => {
-  ensureAudio();
-  if (!recorder || recorder.state === "inactive") {
-    await ac.resume();
-    if (!playing && current.audio) { await current.audio.play(); playing = true; btnPlay.textContent = "Pause"; }
-    startRecording();
-  } else stopRecording();
-});
-
-btnExport.addEventListener("click", async () => {
-  ensureAudio();
-  if (!clips.length) return;
-  await ac.resume();
-  exportMode = true;
-  if (current.index === -1) await playIndex(0);
-  if (current.audio) {
-    try { current.audio.pause(); } catch {}
-    current.audio.currentTime = 0;
-    await current.audio.play();
-    playing = true; btnPlay.textContent = "Pause";
-  }
-  if (!recorder || recorder.state === "inactive") startRecording();
-});
-
-// ── Main loop ─────────────────────────────────────────────────────────────────
-function loop(t) {
-  const dt = Math.min(0.05, (t - lastT) / 1000);
-  lastT = t;
-  const w = canvas.width / dpr, h = canvas.height / dpr;
-  if (viz) viz.render(w, h, dt);
-  drawOverlay(w, h, dt);
-  requestAnimationFrame(loop);
-}
-requestAnimationFrame(loop);
-
-if (/Mobi|Android/i.test(navigator.userAgent)) {
-  const note = document.createElement("div");
-  note.className = "notice";
-  note.textContent = "Add clips and press Play. Due to mobile policies, playback starts on interaction.";
-  document.body.appendChild(note);
-  setTimeout(() => note.remove(), 5000);
-}
