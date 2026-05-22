@@ -1,137 +1,131 @@
-```css
 * {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
 }
 
-html,
-body {
+body, html {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #000000;
-  font-family: Arial, sans-serif;
-  color: #ffffff;
+  background-color: #000;
+  font-family: 'Noto Sans', sans-serif;
+  color: #fff;
 }
 
 #canvas {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  background: black;
-}
-
-#ui {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  z-index: 10;
-  padding: 12px;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.95), rgba(0,0,0,0.65));
-  border-bottom: 1px solid #222;
+  height: 100%;
+  z-index: 1;
 }
 
-.top-controls,
-.text-panel,
-.mic-panel {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-  align-items: center;
-}
-
-.btn {
-  background: #0f0f0f;
-  color: #ffffff;
-  border: 1px solid #444;
-  border-radius: 10px;
-  padding: 10px 16px;
-  cursor: pointer;
-  transition: 0.2s;
-  font-weight: bold;
-}
-
-.btn:hover {
-  background: #1e1e1e;
-  border-color: #777;
-}
-
-.stop-btn {
-  border: 1px solid red;
-  color: #ff7777;
-}
-
-.upload-btn input {
-  display: none;
-}
-
-input[type="text"],
-select {
-  background: #050505;
-  color: #ffffff;
-  border: 1px solid #555;
-  padding: 10px;
-  border-radius: 8px;
-}
-
-#playlist {
-  list-style: none;
+#ui {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  max-height: 100%;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 15px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 300px;
+  gap: 10px;
   overflow-y: auto;
 }
 
-.track {
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+button, .button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+}
+
+button:hover, .button:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+input[type="color"] {
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+}
+
+input[type="range"] {
+  accent-color: #fff;
+  cursor: pointer;
+}
+
+select {
+  background: #222;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+#clip-list {
+  list-style: none;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+}
+
+#clip-list li {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(0,0,0,0.85);
-  border: 1px solid #333;
-  padding: 10px;
-  border-radius: 10px;
-}
-
-.track.active {
-  border: 2px solid #00ffcc;
-}
-
-.track-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.track button {
-  min-width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  border: 1px solid #444;
+  gap: 6px;
   cursor: pointer;
-  background: #111;
-  color: #ffffff;
-  font-weight: bold;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background 0.2s;
 }
 
-.track button:hover {
-  background: #333;
+#clip-list li:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
-@media(max-width:900px){
-
-  .top-controls,
-  .text-panel,
-  .mic-panel {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
+#clip-list li.active {
+  background: #ffffff;
+  color: #000;
+  font-weight: 600;
 }
-```
