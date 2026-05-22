@@ -1,495 +1,548 @@
-// Global State Architecture
-const state = {
-  audioContext: null,
-  analyser: null,
-  dataArray: null,
-  bufferLength: 0,
-  playlist: [],
-  currentIndex: -1,
-  isPlaying: false,
-  
-  mediaElement: null,       
-  sourceNode: null,         
-  streamSourceNode: null,   
-  activeStream: null,       
-  currentInputMode: 'files', 
+import { VisualizerManager } from "./visualizers.js";
 
-  centerMedia: null,
-  scrollImage: null,
-  bgImage: null,
-
-  intensity: 1.5,
-  color: '#ffffff',
-  strobe: true,
-  bgType: 'solid',
-  bgColor1: '#000000',
-  bgColor2: '#202020'
-};
-
-// DOM Mapping
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const fileInput = document.getElementById('file-input');
-const clipListUI = document.getElementById('clip-list');
-const playPauseBtn = document.getElementById('playpause');
-const stopBtn = document.getElementById('stop');
-const prevBtn = document.getElementById('prev');
-const nextBtn = document.getElementById('next');
-const modeSelect = document.getElementById('mode');
-const intensityInput = document.getElementById('intensity');
-const colorInput = document.getElementById('viz-color');
-const strobeInput = document.getElementById('strobe');
-const bgTypeSelect = document.getElementById('bg-type');
-const bgColor1Input = document.getElementById('bg-color1');
-const bgColor2Input = document.getElementById('bg-color2');
-const bgImageInput = document.getElementById('bg-image');
-const imageInput = document.getElementById('image-input');
-const scrollImageInput = document.getElementById('scroll-image');
-const audioSourceSelect = document.getElementById('audio-source-select');
-const trackDisplay = document.getElementById('current-track-display');
-
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d", { alpha: false });
+let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+function resize() {
+  const { innerWidth: w, innerHeight: h } = window;
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
+resize();
+window.addEventListener("resize", resize);
 
-function initAudio() {
-  if (state.audioContext) return;
-  state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  state.analyser = state.audioContext.createAnalyser();
-  state.analyser.fftSize = 512;
-  state.bufferLength = state.analyser.frequencyBinCount;
-  state.dataArray = new Uint8Array(state.bufferLength);
+// UI elements
+const fileInput = document.getElementById("file-input");
+const listEl = document.getElementById("clip-list");
+const btnPlay = document.getElementById("playpause");
+const btnStop = document.getElementById("stop");
+const btnPrev = document.getElementById("prev");
+const btnNext = document.getElementById("next");
+const modeSel = document.getElementById("mode");
+const intensityEl = document.getElementById("intensity");
+const strobeEl = document.getElementById("strobe");
+const imageInput = document.getElementById("image-input");
+const scrollImageInput = document.getElementById("scroll-image");
+const btnSuggestion = document.getElementById("add-suggestion");
+const btnRecord = document.getElementById("record");
+const btnExport = document.getElementById("export");
+const colorInput = document.getElementById("viz-color");
+const audioDeviceSel = document.getElementById("audio-device");
+const btnMicListen = document.getElementById("mic-listen");
+const overlayTextInput = document.getElementById("overlay-text");
+const btnApplyText = document.getElementById("apply-text");
+const trackDisplay = document.getElementById("current-track-display");
+
+// Background UI
+const bgTypeSel = document.getElementById("bg-type");
+const bgColor1 = document.getElementById("bg-color1");
+const bgColor2 = document.getElementById("bg-color2");
+const bgImageInput = document.getElementById("bg-image");
+const bgImageWrap = document.getElementById("bg-image-wrap");
+const bgColor1Wrap = document.getElementById("bg-color1-wrap");
+const bgColor2Wrap = document.getElementById("bg-color2-wrap");
+
+// Audio graph
+let ac;
+let analyser;
+let gainA, gainB;
+let current = { index: -1, audio: null, src: null };
+let nextAudio = null;
+const clips = [];
+let mediaDest, recorder = null, recChunks = [];
+
+// Mic state
+let micStream = null;
+let micSource = null;
+let micListening = false;
+
+// Text overlay state
+let overlayText = "";
+let overlayAlpha = 0;
+let overlayFadeDir = 0; // 0=idle, 1=in, -1=out
+let overlayTimer = null;
+
+// Visualizer
+let viz;
+
+// State
+let playing = false;
+let lastT = performance.now();
+let exportMode = false;
+
+// Show "hot page" popup on load
+const popup = document.createElement("div");
+popup.className = "modal-overlay";
+popup.innerHTML = `<div class="modal-card"><strong>WE'RE ON THE HOT PAGE!</strong><button class="button close">OK</button></div>`;
+document.body.appendChild(popup);
+popup.querySelector(".close").addEventListener("click", () => popup.remove());
+
+function ensureAudio() {
+  if (ac) return;
+  ac = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = ac.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.82;
+  gainA = ac.createGain();
+  gainB = ac.createGain();
+  gainA.gain.value = 1;
+  gainB.gain.value = 0;
+
+  const merger = ac.createGain();
+  gainA.connect(merger);
+  gainB.connect(merger);
+  merger.connect(analyser);
+  analyser.connect(ac.destination);
+  mediaDest = ac.createMediaStreamDestination();
+  analyser.connect(mediaDest);
+
+  viz = new VisualizerManager(ctx, analyser, {
+    mode: modeSel.value,
+    intensity: parseFloat(intensityEl.value),
+    strobe: strobeEl.checked,
+    color: colorInput?.value || "#ffffff",
+    background: {
+      type: bgTypeSel.value,
+      color1: bgColor1.value,
+      color2: bgColor2.value,
+    }
+  });
 }
 
-// Enumerate Microphones / Soundcards
-async function enumerateAudioDevices() {
+// ── Audio device enumeration ──────────────────────────────────────────────────
+async function populateAudioDevices() {
   try {
-    await navigator.mediaDevices.getUserMedia({ audio: true });
+    await navigator.mediaDevices.getUserMedia({ audio: true }).then(s => s.getTracks().forEach(t => t.stop()));
     const devices = await navigator.mediaDevices.enumerateDevices();
-    const audioInputs = devices.filter(device => device.kind === 'audioinput');
-    
-    audioSourceSelect.innerHTML = '<option value="files">Mode: File Playlist</option>';
-    
-    audioInputs.forEach(device => {
-      const option = document.createElement('option');
-      option.value = device.deviceId;
-      option.textContent = device.label || `Audio Device (${device.deviceId.substring(0, 5)})`;
-      audioSourceSelect.appendChild(option);
+    const audioInputs = devices.filter(d => d.kind === "audioinput");
+    audioDeviceSel.innerHTML = "";
+    audioInputs.forEach((d, i) => {
+      const opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Microfon ${i + 1}`;
+      audioDeviceSel.appendChild(opt);
     });
   } catch (err) {
-    console.warn("Hardware permission blocked or unavailable:", err);
-    trackDisplay.textContent = "Sursă: Lipsă permisiuni microfon (rulează doar pe https://)";
+    console.warn("Could not enumerate audio devices:", err);
   }
 }
+populateAudioDevices();
 
-audioSourceSelect.addEventListener('change', async (e) => {
-  initAudio();
-  const val = e.target.value;
-  stopAllSources();
+navigator.mediaDevices.addEventListener("devicechange", populateAudioDevices);
 
-  if (val === 'files') {
-    state.currentInputMode = 'files';
-    state.isPlaying = false;
-    playPauseBtn.textContent = 'Play';
-    trackDisplay.textContent = state.currentIndex !== -1 ? `Sursă: ${state.playlist[state.currentIndex].name}` : "Sursă: Playlist Fișiere";
-  } else {
-    state.currentInputMode = 'hardware';
-    try {
-      state.activeStream = await navigator.mediaDevices.getUserMedia({
-        audio: { deviceId: { exact: val } }
-      });
-      
-      state.streamSourceNode = state.audioContext.createMediaStreamSource(state.activeStream);
-      state.streamSourceNode.connect(state.analyser);
-      state.audioContext.resume();
-      
-      state.isPlaying = true;
-      playPauseBtn.textContent = 'Streaming';
-      trackDisplay.textContent = `Sursă Activă: ${audioSourceSelect.options[audioSourceSelect.selectedIndex].text}`;
-    } catch (err) {
-      console.error("Hardware connection failed:", err);
-      trackDisplay.textContent = "Eroare la activarea hardware-ului.";
-    }
+// ── Mic listen ────────────────────────────────────────────────────────────────
+btnMicListen.addEventListener("click", async () => {
+  ensureAudio();
+  if (ac.state === "suspended") await ac.resume();
+
+  if (micListening) {
+    stopMicHardware();
+    trackDisplay.textContent = current.audio ? `Sursă: ${clips[current.index].name}` : "Sursă: Oprită (Playlist)";
+    return;
   }
-});
 
-enumerateAudioDevices();
+  // Oprim muzica MP3 complet dacă activăm microfonul ca să nu se suprapună grosolan
+  stopAllMediaClips();
 
-// File Integration Loop
-fileInput.addEventListener('change', (e) => {
-  initAudio();
-  const files = Array.from(e.target.files);
-  const wasEmpty = state.playlist.length === 0;
+  const deviceId = audioDeviceSel.value;
+  const constraints = {
+    audio: deviceId ? { deviceId: { exact: deviceId } } : true
+  };
 
-  files.forEach(file => {
-    const url = URL.createObjectURL(file);
-    state.playlist.push({ name: file.name, url: url, type: file.type });
-  });
-
-  updatePlaylistUI();
-
-  if (wasEmpty && state.playlist.length > 0) {
-    loadTrack(0, false); 
-  }
-});
-
-function updatePlaylistUI() {
-  clipListUI.innerHTML = '';
-  state.playlist.forEach((track, index) => {
-    const li = document.createElement('li');
-    li.textContent = track.name.length > 30 ? track.name.substring(0, 30) + '...' : track.name;
-    if (index === state.currentIndex && state.currentInputMode === 'files') li.classList.add('active');
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia(constraints);
+    micSource = ac.createMediaStreamSource(micStream);
+    micSource.connect(analyser);
+    micListening = true;
+    playing = true; // Permitem loop-ului de randare să citească datele
+    btnMicListen.textContent = "🛑 Stop Mic";
+    btnMicListen.classList.add("active");
     
-    li.addEventListener('click', () => {
-      audioSourceSelect.value = 'files';
-      state.currentInputMode = 'files';
-      loadTrack(index, true); 
+    const selectedLabel = audioDeviceSel.options[audioDeviceSel.selectedIndex]?.textContent || "Microfon Extern";
+    trackDisplay.textContent = `Sursă Activă: ${selectedLabel}`;
+  } catch (err) {
+    alert("Nu s-a putut accesa microfonul: " + err.message);
+  }
+});
+
+function stopMicHardware() {
+  if (micSource) { micSource.disconnect(); micSource = null; }
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  micListening = false;
+  btnMicListen.textContent = "🎤 Listen Mic";
+  btnMicListen.classList.remove("active");
+}
+
+// ── Text overlay ──────────────────────────────────────────────────────────────
+btnApplyText.addEventListener("click", () => {
+  const txt = overlayTextInput.value.trim();
+  if (!txt) return;
+  overlayText = txt;
+  overlayAlpha = 0;
+  overlayFadeDir = 1;
+  clearTimeout(overlayTimer);
+  overlayTimer = setTimeout(() => { overlayFadeDir = -1; }, 4000);
+});
+
+overlayTextInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") btnApplyText.click();
+});
+
+function drawOverlay(w, h, dt) {
+  if (!overlayText) return;
+  if (overlayFadeDir === 1) overlayAlpha = Math.min(1, overlayAlpha + dt * 2);
+  if (overlayFadeDir === -1) {
+    overlayAlpha = Math.max(0, overlayAlpha - dt * 1.2);
+    if (overlayAlpha === 0) { overlayText = ""; overlayFadeDir = 0; }
+  }
+  if (overlayAlpha <= 0) return;
+
+  const fontSize = Math.max(24, Math.min(72, w / 14));
+  ctx.save();
+  ctx.globalAlpha = overlayAlpha * 0.92;
+  ctx.font = `600 ${fontSize}px "Noto Sans", system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(0,0,0,0.8)";
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(overlayText, w / 2, h * 0.82, w * 0.9);
+  ctx.restore();
+}
+
+// ── Clips ─────────────────────────────────────────────────────────────────────
+function addClip(file) {
+  const url = URL.createObjectURL(file);
+  const isVideo = (file.type || "").startsWith("video") || /\.mp4$/i.test(file.name);
+  clips.push({ name: file.name, url, file, isVideo });
+  renderList();
+  
+  // FIX CRITIC: Nu mai dăm play automagically la index 0 când adaugi clipuri! 
+  // Doar setăm indexul ca fiind pregătit dacă nu cântă nimic altceva, fără auto-start haotic.
+  if (current.index === -1) {
+    current.index = 0;
+    trackDisplay.textContent = `Sursă selectată: ${file.name} (Apasă Play)`;
+  }
+}
+
+fileInput.addEventListener("change", (e) => {
+  ensureAudio();
+  const files = Array.from(e.target.files || []);
+  files.forEach(addClip);
+  fileInput.value = "";
+});
+
+imageInput.addEventListener("change", (e) => {
+  ensureAudio();
+  const file = (e.target.files || [])[0];
+  if (file && viz) {
+    const url = URL.createObjectURL(file);
+    if ((file.type || "").startsWith("video")) viz.setCenterMedia(url, "video");
+    else viz.setCenterMedia(url, "image");
+  }
+  imageInput.value = "";
+});
+
+scrollImageInput.addEventListener("change", (e) => {
+  ensureAudio();
+  const file = (e.target.files || [])[0];
+  if (file && viz) {
+    const url = URL.createObjectURL(file);
+    viz.setScrollingImage(url);
+  }
+  scrollImageInput.value = "";
+});
+
+btnSuggestion.addEventListener("click", () => {
+  ensureAudio();
+  if (viz) viz.setScrollingImage("./websimsuggestionimage.png");
+});
+
+// ── Play / Pause ──────────────────────────────────────────────────────────────
+btnPlay.addEventListener("click", async () => {
+  ensureAudio();
+  if (!clips.length) return;
+  if (ac.state === "suspended") await ac.resume();
+  
+  // Dacă ascultam la microfon, oprim streamul microfonului mai întâi ca să trecem pe piese
+  if (micListening) stopMicHardware();
+
+  if (!playing) {
+    if (current.audio) {
+      current.audio.play();
+    } else {
+      // Dacă nu era încărcată nicio piesă structural în nod, o încărcăm pe cea selectată curent
+      playIndex(current.index !== -1 ? current.index : 0);
+      return;
+    }
+    btnPlay.textContent = "Pause";
+    playing = true;
+    trackDisplay.textContent = `Sursă: ${clips[current.index].name}`;
+  } else {
+    if (current.audio) current.audio.pause();
+    if (nextAudio) nextAudio.pause();
+    btnPlay.textContent = "Play";
+    playing = false;
+  }
+});
+
+// ── Stop ──────────────────────────────────────────────────────────────────────
+function stopAllMediaClips() {
+  if (current.audio) {
+    current.audio.pause();
+    try { current.audio.currentTime = 0; } catch {}
+  }
+  if (nextAudio) {
+    nextAudio.pause();
+    try { nextAudio.currentTime = 0; } catch {}
+  }
+  playing = false;
+  btnPlay.textContent = "Play";
+}
+
+btnStop.addEventListener("click", () => {
+  stopAllMediaClips();
+  stopMicHardware();
+  trackDisplay.textContent = "Sursă: Oprită complet";
+});
+
+// ── Prev / Next ───────────────────────────────────────────────────────────────
+btnPrev.addEventListener("click", () => {
+  if (!clips.length) return;
+  stopMicHardware();
+  const idx = (current.index - 1 + clips.length) % clips.length;
+  playIndex(idx);
+});
+
+btnNext.addEventListener("click", () => {
+  if (!clips.length) return;
+  stopMicHardware();
+  const idx = (current.index + 1) % clips.length;
+  playIndex(idx);
+});
+
+// ── Heavy mode warning ────────────────────────────────────────────────────────
+const heavyModes = new Set(["jumbled","particles"]);
+const acknowledged = new Set();
+function askHeavy(mode) {
+  if (acknowledged.has(mode)) return Promise.resolve(true);
+  return new Promise(res => {
+    const o = document.createElement("div"); o.className = "modal-overlay";
+    o.innerHTML = `<div class="modal-card"><strong>This mode can be heavy.</strong><p style="margin:8px 0 14px">"${mode === "jumbled" ? "Jumbled Mess" : "Particles"}" may be laggy on low-end devices.</p><div style="display:flex;gap:8px;justify-content:flex-end"><button class="button cancel">Cancel</button><button class="button proceed">Proceed</button></div></div>`;
+    document.body.appendChild(o);
+    o.querySelector(".cancel").onclick = () => { o.remove(); res(false); };
+    o.querySelector(".proceed").onclick = () => { acknowledged.add(mode); o.remove(); res(true); };
+  });
+}
+
+modeSel.addEventListener("change", async (e) => {
+  const val = modeSel.value;
+  if (heavyModes.has(val)) {
+    const ok = await askHeavy(val);
+    if (!ok) { modeSel.value = viz?.mode || "bars"; return; }
+  }
+  viz && viz.setOptions({ mode: val });
+});
+
+intensityEl.addEventListener("input", () => viz && viz.setOptions({ intensity: parseFloat(intensityEl.value) }));
+strobeEl.addEventListener("change", () => viz && viz.setOptions({ strobe: strobeEl.checked }));
+colorInput.addEventListener("input", () => viz && viz.setOptions({ color: colorInput.value }));
+
+// ── Background controls ───────────────────────────────────────────────────────
+function updateBgControlVisibility() {
+  const t = bgTypeSel.value;
+  if (t === "solid") {
+    bgImageWrap.style.display = "none";
+    bgColor1Wrap.style.display = "inline-flex";
+    bgColor2Wrap.style.display = "none";
+  } else if (t === "gradient") {
+    bgImageWrap.style.display = "none";
+    bgColor1Wrap.style.display = "inline-flex";
+    bgColor2Wrap.style.display = "inline-flex";
+  } else {
+    bgImageWrap.style.display = "inline-flex";
+    bgColor1Wrap.style.display = "none";
+    bgColor2Wrap.style.display = "none";
+  }
+}
+updateBgControlVisibility();
+
+bgTypeSel.addEventListener("change", () => {
+  updateBgControlVisibility();
+  viz && viz.setBackground({ type: bgTypeSel.value, color1: bgColor1.value, color2: bgColor2.value });
+});
+bgColor1.addEventListener("input", () => viz && viz.setBackground({ type: bgTypeSel.value, color1: bgColor1.value, color2: bgColor2.value }));
+bgColor2.addEventListener("input", () => viz && viz.setBackground({ type: bgTypeSel.value, color1: bgColor1.value, color2: bgColor2.value }));
+bgImageInput.addEventListener("change", (e) => {
+  const file = (e.target.files || [])[0];
+  if (file && viz) {
+    const url = URL.createObjectURL(file);
+    viz.setBackground({ type: "image" });
+    viz.setBackgroundImage(url);
+  }
+  bgImageInput.value = "";
+});
+
+// ── Clip list render ──────────────────────────────────────────────────────────
+function renderList() {
+  listEl.innerHTML = "";
+  clips.forEach((c, i) => {
+    const li = document.createElement("li");
+    if (i === current.index && !micListening) li.classList.add("active");
+    const name = document.createElement("span");
+    name.textContent = truncate(c.name, 28);
+    
+    const playBtn = document.createElement("button");
+    playBtn.className = "play";
+    playBtn.textContent = "Play";
+    playBtn.addEventListener("click", () => {
+      stopMicHardware();
+      playIndex(i);
     });
-    clipListUI.appendChild(li);
+    
+    const dlBtn = document.createElement("button");
+    dlBtn.className = "download";
+    dlBtn.textContent = "Download";
+    dlBtn.addEventListener("click", () => downloadClip(c));
+    
+    li.appendChild(playBtn);
+    li.appendChild(dlBtn);
+    li.appendChild(name);
+    listEl.appendChild(li);
   });
 }
 
-function loadTrack(index, autoPlay = false) {
-  if (index < 0 || index >= state.playlist.length) return;
-  
-  stopAllSources();
-  state.currentIndex = index;
-  const track = state.playlist[index];
+function truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
 
-  const isVideo = track.type.startsWith('video');
-  state.mediaElement = document.createElement(isVideo ? 'video' : 'audio');
-  state.mediaElement.src = track.url;
-  state.mediaElement.crossOrigin = "anonymous";
-  
-  state.sourceNode = state.audioContext.createMediaElementSource(state.mediaElement);
-  state.sourceNode.connect(state.analyser);
-  state.analyser.connect(state.audioContext.destination);
-
-  updatePlaylistUI();
-  trackDisplay.textContent = `Sursă: ${track.name}`;
-
-  if (autoPlay) {
-    state.audioContext.resume();
-    state.mediaElement.play().catch(err => console.log("Playback engine exception:", err));
-    state.isPlaying = true;
-    playPauseBtn.textContent = 'Pause';
-  } else {
-    state.isPlaying = false;
-    playPauseBtn.textContent = 'Play';
-  }
+function connectMediaElement(audioEl, toA = true) {
+  const srcNode = ac.createMediaElementSource(audioEl);
+  srcNode.connect(toA ? gainA : gainB);
+  return srcNode;
 }
 
-function stopAllSources() {
-  if (state.mediaElement) {
-    state.mediaElement.pause();
-    state.mediaElement.currentTime = 0; 
+// ── Play index ────────────────────────────────────────────────────────────────
+async function playIndex(index) {
+  ensureAudio();
+  const clip = clips[index];
+  if (!clip) return;
+
+  if (current.audio) {
+    current.audio.pause();
+    try { current.audio.currentTime = 0; } catch {}
   }
-  if (state.activeStream) {
-    state.activeStream.getTracks().forEach(track => track.stop());
-    state.activeStream = null;
-  }
-  if (state.streamSourceNode) {
-    state.streamSourceNode.disconnect();
-    state.streamSourceNode = null;
-  }
-}
 
-playPauseBtn.addEventListener('click', () => {
-  initAudio();
-  if (state.currentInputMode === 'hardware') return; 
-
-  if (!state.mediaElement && state.playlist.length > 0) loadTrack(0, true);
-  if (!state.mediaElement) return;
-
-  if (state.isPlaying) {
-    state.mediaElement.pause();
-    playPauseBtn.textContent = 'Play';
-  } else {
-    state.audioContext.resume();
-    state.mediaElement.play();
-    playPauseBtn.textContent = 'Pause';
-  }
-  state.isPlaying = !state.isPlaying;
-});
-
-stopBtn.addEventListener('click', () => {
-  stopAllSources();
-  state.isPlaying = false;
-  playPauseBtn.textContent = 'Play';
-  if (state.currentInputMode === 'hardware') {
-    audioSourceSelect.value = 'files';
-    state.currentInputMode = 'files';
-  }
-  trackDisplay.textContent = "Sursă: Oprită";
-});
-
-prevBtn.addEventListener('click', () => { 
-  if (state.currentInputMode === 'files' && state.currentIndex > 0) {
-    loadTrack(state.currentIndex - 1, true); 
-  } 
-});
-
-nextBtn.addEventListener('click', () => { 
-  if (state.currentInputMode === 'files' && state.currentIndex < state.playlist.length - 1) {
-    loadTrack(state.currentIndex + 1, true); 
-  } 
-});
-
-intensityInput.addEventListener('input', (e) => state.intensity = parseFloat(e.target.value));
-colorInput.addEventListener('input', (e) => state.color = e.target.value);
-strobeInput.addEventListener('change', (e) => state.strobe = e.target.checked);
-bgTypeSelect.addEventListener('change', (e) => {
-  state.bgType = e.target.value;
-  toggleBgControls();
-});
-bgColor1Input.addEventListener('input', (e) => state.bgColor1 = e.target.value);
-bgColor2Input.addEventListener('input', (e) => state.bgColor2 = e.target.value);
-
-function toggleBgControls() {
-  document.getElementById('bg-color1-wrap').style.display = state.bgType === 'image' ? 'none' : 'inline-flex';
-  document.getElementById('bg-color2-wrap').style.display = state.bgType === 'gradient' ? 'inline-flex' : 'none';
-  document.getElementById('bg-image-wrap').style.display = state.bgType === 'image' ? 'inline-flex' : 'none';
-}
-toggleBgControls();
-
-function handleImageUpload(inputEl, stateKey) {
-  inputEl.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const img = new Image();
-      img.src = URL.createObjectURL(file);
-      img.onload = () => state[stateKey] = img;
-    }
+  const media = clip.isVideo ? document.createElement("video") : new Audio();
+  Object.assign(media, {
+    src: clip.url,
+    preload: "auto",
+    crossOrigin: "anonymous",
+    loop: false,
+    playsInline: true
   });
-}
-handleImageUpload(bgImageInput, 'bgImage');
-handleImageUpload(imageInput, 'centerMedia');
-handleImageUpload(scrollImageInput, 'scrollImage');
+  media.addEventListener("ended", () => {
+    if (exportMode) { stopRecording(); exportMode = false; }
+    else { btnNext.click(); }
+  });
 
-// --- 30+ MODES RENDER CORE MATRIX ---
-function render() {
-  requestAnimationFrame(render);
+  gainA.gain.cancelScheduledValues(ac.currentTime);
+  gainB.gain.cancelScheduledValues(ac.currentTime);
+  gainA.gain.setValueAtTime(1, ac.currentTime);
+  gainB.gain.setValueAtTime(0, ac.currentTime);
 
-  const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2;
-  let audioLevel = 0;
+  connectMediaElement(media, true);
 
-  if (state.analyser && state.isPlaying) {
-    state.analyser.getByteFrequencyData(state.dataArray);
-    let sum = 0;
-    for (let i = 0; i < state.bufferLength; i++) sum += state.dataArray[i];
-    audioLevel = (sum / state.bufferLength) / 255; 
+  try {
+    if (ac.state === "suspended") await ac.resume();
+    await media.play();
+    playing = true;
+    btnPlay.textContent = "Pause";
+    trackDisplay.textContent = `Sursă: ${clip.name}`;
+  } catch(err) {
+    console.error("Playback issue:", err);
   }
 
-  // Draw Background Layer
-  if (state.bgType === 'solid') {
-    ctx.fillStyle = state.bgColor1;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  } else if (state.bgType === 'gradient') {
-    let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    grad.addColorStop(0, state.bgColor1);
-    grad.addColorStop(1, state.bgColor2);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  } else if (state.bgType === 'image' && state.bgImage) {
-    ctx.drawImage(state.bgImage, 0, 0, canvas.width, canvas.height);
-  } else {
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-
-  if (state.strobe && audioLevel > 0.5) {
-    ctx.fillStyle = `rgba(255, 255, 255, ${(audioLevel - 0.5) * 0.2})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-
-  if (state.scrollImage) {
-    let scrollSpeed = (audioLevel * 10) + 1;
-    if (!state.scrollX) state.scrollX = 0;
-    state.scrollX = (state.scrollX + scrollSpeed) % canvas.width;
-    ctx.save();
-    ctx.globalAlpha = 0.3;
-    ctx.drawImage(state.scrollImage, state.scrollX - canvas.width, 0, canvas.width, canvas.height);
-    ctx.drawImage(state.scrollImage, state.scrollX, 0, canvas.width, canvas.height);
-    ctx.restore();
-  }
-
-  const currentMode = modeSelect.value;
-  ctx.strokeStyle = state.color;
-  ctx.fillStyle = state.color;
-  ctx.lineWidth = 2;
-
-  if (state.analyser && state.isPlaying) {
-    const bars = state.bufferLength;
-    const barWidth = canvas.width / bars;
-
-    // 1. BARS PATTERNS
-    if (currentMode.includes('bars')) {
-      for (let i = 0; i < bars; i++) {
-        let height = state.dataArray[i] * state.intensity;
-        if (currentMode === 'barswave') {
-          ctx.fillRect(i * barWidth, canvas.height - height, barWidth - 2, height);
-          let yWave = centerY + (state.dataArray[i] - 128) * state.intensity;
-          ctx.fillRect(i * barWidth, yWave, 2, 2);
-        } else {
-          ctx.fillRect(i * barWidth, canvas.height - height, barWidth - 2, height);
-        }
-      }
-    }
-
-    // 2. RADIAL / RINGS / SPHERES / VORTEX
-    if (currentMode.includes('radial') || currentMode.includes('vortex') || currentMode.includes('spiral') || currentMode.includes('rings') || currentMode === 'hex' || currentMode === 'circles') {
-      const radius = currentMode.includes('vortex') ? 10 : 100 + (audioLevel * 60);
-      
-      if (currentMode === 'hex') {
-        ctx.save();
-        ctx.translate(centerX, centerY);
-        ctx.rotate(audioLevel * Math.PI);
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-          let angle = (i / 6) * Math.PI * 2;
-          let r = radius + (state.dataArray[i * 10] || 0) * state.intensity * 0.3;
-          let x = Math.cos(angle) * r;
-          let y = Math.sin(angle) * r;
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-      } else {
-        ctx.beginPath();
-        for (let i = 0; i < bars; i++) {
-          let angle = (i / bars) * Math.PI * 2;
-          if (currentMode.includes('spiral')) {
-            angle = (i / bars) * Math.PI * 8 + (audioLevel * 2);
-          }
-          
-          let dataVal = state.dataArray[i];
-          let extRadius = radius + (dataVal * state.intensity * 0.6);
-          
-          let x1 = centerX + Math.cos(angle) * radius;
-          let y1 = centerY + Math.sin(angle) * radius;
-          let x2 = centerX + Math.cos(angle) * extRadius;
-          let y2 = centerY + Math.sin(angle) * extRadius;
-          
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x2, y2);
-
-          if ((currentMode === 'radialcircles' || currentMode === 'circles') && i % 15 === 0) {
-            ctx.arc(centerX, centerY, dataVal * state.intensity * 0.8, 0, Math.PI * 2);
-          }
-          if (currentMode === 'radialgrid' && i % 8 === 0) {
-            ctx.moveTo(x1, 0); ctx.lineTo(x1, canvas.height);
-          }
-        }
-        ctx.stroke();
-      }
-    }
-
-    // 3. WAVE / MIRROR / TUNNELS
-    if (currentMode.includes('wave') || currentMode.includes('mirror') || currentMode === 'wavetunnel' || currentMode === 'ripple') {
-      ctx.beginPath();
-      for (let i = 0; i < bars; i++) {
-        let x = i * barWidth;
-        let offset = (state.dataArray[i] - 128) * state.intensity;
-        
-        if (currentMode === 'mirror' || currentMode === 'mirrorcircles') {
-          if (i === 0) {
-            ctx.moveTo(x, centerY - offset);
-          } else {
-            ctx.lineTo(x, centerY - offset);
-            ctx.lineTo(x, centerY + offset);
-          }
-        } else if (currentMode === 'wavetunnel') {
-          let rTunnel = (canvas.height * 0.4) * (i / bars) + offset;
-          ctx.arc(centerX, centerY, Math.max(1, rTunnel), 0, Math.PI * 2);
-        } else {
-          let y = centerY + offset;
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        }
-      }
-      ctx.stroke();
-    }
-
-    // 4. COMPLEX MATH GEOMETRY / PARTICLE SYSTEMS
-    if (['particles', 'vortexparticles', 'starfield', 'grid', 'spiralgrid', 'blobs', 'lissajous', 'spectrumdots', 'triangles', 'orbitals', 'horizon', 'water', 'jumbled'].includes(currentMode)) {
-      ctx.save();
-      
-      if (currentMode === 'jumbled' || currentMode === 'triangles') {
-        ctx.beginPath();
-        for (let i = 0; i < bars; i += 4) {
-          let factor = state.dataArray[i] * state.intensity;
-          ctx.lineTo(centerX + Math.sin(i) * factor, centerY + Math.cos(i) * factor);
-          if (currentMode === 'triangles') ctx.lineTo(centerX, centerY);
-        }
-        ctx.closePath();
-        ctx.stroke();
-      } 
-      else if (currentMode === 'lissajous') {
-        ctx.beginPath();
-        let freq1 = (state.dataArray[5] || 1) * 0.05;
-        let freq2 = (state.dataArray[50] || 1) * 0.05;
-        for (let t = 0; t < Math.PI * 2; t += 0.05) {
-          let x = centerX + Math.sin(t * freq1) * (canvas.width * 0.3) * state.intensity;
-          let y = centerY + Math.cos(t * freq2) * (canvas.height * 0.3) * state.intensity;
-          if (t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
-      } 
-      else if (currentMode === 'grid' || currentMode === 'spiralgrid') {
-        let gridSize = 30;
-        for (let x = 0; x < canvas.width; x += gridSize) {
-          for (let y = 0; y < canvas.height; y += gridSize) {
-            let idx = Math.floor((x + y) % bars);
-            let pSize = (state.dataArray[idx] / 255) * state.intensity * 6;
-            ctx.fillRect(x, y, pSize, pSize);
-          }
-        }
-      } 
-      else {
-        for (let i = 0; i < bars; i += 2) {
-          let amp = state.dataArray[i] * state.intensity;
-          ctx.beginPath();
-          
-          let pX, pY;
-          if (currentMode === 'horizon') {
-            pX = (i / bars) * canvas.width;
-            pY = canvas.height - amp;
-          } else if (currentMode === 'spectrumdots' || currentMode === 'water') {
-            pX = (i / bars) * canvas.width;
-            pY = centerY + Math.sin(i + (audioLevel * 5)) * amp * 0.5;
-          } else { 
-            let angle = i * 0.5 + (audioLevel * 2);
-            pX = centerX + Math.cos(angle) * (amp * 1.2);
-            pY = centerY + Math.sin(angle) * (amp * 1.2);
-          }
-          
-          ctx.arc(pX, pY, Math.max(1, amp * 0.03), 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-      ctx.restore();
-    }
-  } else {
-    // Idle state visual loop
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 80 + Math.sin(Date.now() * 0.002) * 5, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  // Floating Center Media Thumbnail Layer
-  if (state.centerMedia) {
-    const size = 180 + (audioLevel * 40);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, size / 2, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(state.centerMedia, centerX - size / 2, centerY - size / 2, size, size);
-    ctx.restore();
-  }
+  nextAudio = null;
+  current = { index, audio: media, _toB: false };
+  renderList();
 }
 
-render();
+function downloadClip(c) {
+  const a = document.createElement("a");
+  a.href = c.url;
+  a.download = c.name || "clip";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// ── Recording ─────────────────────────────────────────────────────────────────
+function startRecording() {
+  const vs = canvas.captureStream(60), as = mediaDest.stream;
+  const stream = new MediaStream([...vs.getVideoTracks(), ...as.getAudioTracks()]);
+  recChunks = [];
+  const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus") ? "video/webm;codecs=vp9,opus" : "video/webm;codecs=vp8,opus";
+  recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6e6 });
+  recorder.ondataavailable = (e) => e.data && recChunks.push(e.data);
+  recorder.onstop = () => handleStop(mime);
+  recorder.start();
+  btnRecord.textContent = "Stop";
+}
+
+function handleStop(mime) {
+  const blob = new Blob(recChunks, { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const base = (clips[current.index]?.name || "visualizer").replace(/\.[^/.]+$/, "");
+  a.href = url; a.download = `${base}-${Date.now()}.webm`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  btnRecord.textContent = "Record";
+}
+
+function stopRecording() { recorder && recorder.stop(); }
+
+btnRecord.addEventListener("click", async () => {
+  ensureAudio();
+  if (!recorder || recorder.state === "inactive") {
+    await ac.resume();
+    if (!playing && current.audio) { await current.audio.play(); playing = true; btnPlay.textContent = "Pause"; }
+    startRecording();
+  } else stopRecording();
+});
+
+btnExport.addEventListener("click", async () => {
+  ensureAudio();
+  if (!clips.length) return;
+  await ac.resume();
+  exportMode = true;
+  if (current.index === -1) await playIndex(0);
+  if (current.audio) {
+    try { current.audio.pause(); } catch {}
+    current.audio.currentTime = 0;
+    await current.audio.play();
+    playing = true; btnPlay.textContent = "Pause";
+  }
+  if (!recorder || recorder.state === "inactive") startRecording();
+});
+
+// ── Main loop ─────────────────────────────────────────────────────────────────
+function loop(t) {
+  const dt = Math.min(0.05, (t - lastT) / 1000);
+  lastT = t;
+  const w = canvas.width / dpr, h = canvas.height / dpr;
+  if (viz) viz.render(w, h, dt);
+  drawOverlay(w, h, dt);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+if (/Mobi|Android/i.test(navigator.userAgent)) {
+  const note = document.createElement("div");
+  note.className = "notice";
+  note.textContent = "Add clips and press Play. Due to mobile policies, playback starts on interaction.";
+  document.body.appendChild(note);
+  setTimeout(() => note.remove(), 5000);
+}
