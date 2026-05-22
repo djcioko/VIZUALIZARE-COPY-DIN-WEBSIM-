@@ -1,22 +1,277 @@
-<!DOCTYPE html>
-<html lang="ro">
+# index.html
+
+```html
+<!doctype html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Visualizer</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DJ Visualizer Studio</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <div id="ui">
-        <div class="controls">
-            <input type="file" id="file-input" multiple accept="audio/*,video/*">
-            <button id="playpause">Play/Pause</button>
-            <button id="stop">Stop</button>
-            <select id="audio-device"><option value="">Alege Microfon...</option></select>
-            <button id="mic-listen">🎤 Listen</button>
-        </div>
-        <ul id="clip-list"></ul>
-    </div>
-    <canvas id="canvas"></canvas>
-    <script type="module" src="app.js"></script>
+
+<div id="ui">
+
+  <div class="top-controls">
+
+    <label class="btn upload-btn">
+      + ADD SONG
+      <input id="file-input" type="file" accept="audio/*" multiple hidden>
+    </label>
+
+    <label class="btn upload-btn">
+      + LOGO ADD
+      <input id="logo-input" type="file" accept="image/*,video/*" hidden>
+    </label>
+
+    <label class="btn upload-btn">
+      + BG IMAGE / VIDEO
+      <input id="bg-input" type="file" accept="image/*,video/*" hidden>
+    </label>
+
+    <button id="play-all" class="btn">PLAY</button>
+    <button id="pause-all" class="btn">PAUSE</button>
+    <button id="stop-all" class="btn stop-btn">STOP</button>
+
+  </div>
+
+  <div class="text-panel">
+
+    <input id="overlay-text" type="text" placeholder="Write text here...">
+
+    <label>
+      TEXT SIZE
+      <input id="text-size" type="range" min="20" max="140" value="70">
+    </label>
+
+    <label>
+      TEXT COLOR
+      <input id="text-color" type="color" value="#ffffff">
+    </label>
+
+    <button id="show-text" class="btn">SHOW TEXT</button>
+
+  </div>
+
+  <div class="mic-panel">
+
+    <select id="mic-select"></select>
+
+    <button id="enable-mic" class="btn">
+      ENABLE MIC
+    </button>
+
+  </div>
+
+  <ul id="playlist"></ul>
+
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script type="module" src="app.js"></script>
+
 </body>
 </html>
+```
+
+---
+
+# styles.css
+
+```css
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: black;
+  font-family: Arial, sans-serif;
+  color: white;
+}
+
+#canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  background: black;
+}
+
+#ui {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 10;
+  padding: 12px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+}
+
+.top-controls,
+.text-panel,
+.mic-panel {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.btn {
+  background: #111;
+  color: white;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.btn:hover {
+  background: #222;
+}
+
+.stop-btn {
+  border: 1px solid red;
+  color: #ff7777;
+}
+
+.upload-btn input {
+  display: none;
+}
+
+input[type="text"],
+select {
+  background: #111;
+  color: white;
+  border: 1px solid #333;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+#playlist {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.track {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255,255,255,0.08);
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.track.active {
+  border: 2px solid #00ffcc;
+}
+
+.track-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track button {
+  min-width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: #222;
+  color: white;
+}
+
+.track button:hover {
+  background: #333;
+}
+
+@media(max-width:900px){
+
+  .top-controls,
+  .text-panel,
+  .mic-panel {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+}
+```
+
+---
+
+# app.js
+
+```javascript
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+resize();
+window.addEventListener("resize", resize);
+
+const fileInput = document.getElementById("file-input");
+const logoInput = document.getElementById("logo-input");
+const bgInput = document.getElementById("bg-input");
+
+const playAllBtn = document.getElementById("play-all");
+const pauseAllBtn = document.getElementById("pause-all");
+const stopAllBtn = document.getElementById("stop-all");
+
+const playlistEl = document.getElementById("playlist");
+
+const micSelect = document.getElementById("mic-select");
+const enableMicBtn = document.getElementById("enable-mic");
+
+const overlayTextInput = document.getElementById("overlay-text");
+const textSizeInput = document.getElementById("text-size");
+const textColorInput = document.getElementById("text-color");
+const showTextBtn = document.getElementById("show-text");
+
+let audioContext;
+let analyser;
+let dataArray;
+
+let micStream = null;
+let micSource = null;
+
+let tracks = [];
+let currentTrackIndex = -1;
+
+let logoMedia = null;
+let backgroundMedia = null;
+
+let overlayText = "";
+let overlaySize = 70;
+let overlayColor = "#ffffff";
+
+function initAudio() {
+
+  if(audioContext) return;
+
+  audioContext = new(window.AudioContext || window.webkitAudioContext)();
+
+  analyser = audioContext.createAnalyser();
+  analyser.fftSize = 256;
+
+  const b
+```
