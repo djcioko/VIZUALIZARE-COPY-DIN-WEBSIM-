@@ -1,14 +1,126 @@
-body, html { margin: 0; padding: 0; height: 100%; background: #000; color: #fff; font-family: sans-serif; overflow: hidden; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-#ui { position: fixed; top: 0; width: 100%; background: #000; padding: 10px; z-index: 10; border-bottom: 1px solid #333; }
-.controls { display: flex; gap: 10px; align-items: center; }
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #000;
+  font-family: 'Noto Sans', sans-serif;
+  color: #fff;
+}
 
-button, .button { background: #222; border: 1px solid #444; color: white; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
-button:hover { background: #333; }
+#canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
 
-#canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 1; }
+#ui {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  max-height: 100%;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
 
-#clip-list { list-style: none; padding: 5px 0; margin: 0; display: flex; gap: 10px; overflow-x: auto; }
-#clip-list li { background: #111; padding: 5px 10px; border-radius: 4px; font-size: 12px; }
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
 
-#overlay-text { background: #111; border: 1px solid #444; color: white; padding: 8px; border-radius: 4px; }
+/* Unified button and label styling */
+button, .button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+}
+
+button:hover, .button:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+input[type="color"] {
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+}
+
+input[type="range"] {
+  accent-color: #fff;
+  cursor: pointer;
+}
+
+select {
+  background: #222;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+#clip-list {
+  list-style: none;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+}
+
+#clip-list li {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#clip-list li.active {
+  background: #ffffff;
+  color: #000;
+  font-weight: 600;
+}
